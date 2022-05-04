@@ -9,7 +9,7 @@ Infrastructures Planner is a cutom gym environment to plan interventions on infr
 To get started, create a virtual environment in vscode
 
 `
-$ python -m venv venv
+$ python -m venv .venv
 `
 
 Install the required packages by using the pip command in terminal:
