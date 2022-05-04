@@ -4,7 +4,8 @@
 
 Infrastructures Planner is a cutom gym environment to plan interventions on infrastrucutres.
 
-### Getting Started
+## Getting Started
+
 To get started, create a virtual environment in vscode
 
 `
