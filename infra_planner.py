@@ -1,4 +1,12 @@
-import gym
+""" Infrastructures Planner ########################################################################################################
+
+    Infrastructures Planner is a custom gym environment to plan interventions on infrastrucutres.
+    Developed by: Zachary Hamida
+    Email: zac.hamida@gmail.com
+    Webpage: https://zachamida.github.io
+
+"""
+
 from gym import spaces
 import numpy as np
 import math as mt
@@ -24,9 +32,9 @@ class InfrastructuresPlanner:
     def reset(self):
         # Analyses level
         self.element_lvl = 0
-        self.category_lvl = 1
+        self.category_lvl = 0
         self.bridge_lvl = 0
-        self.network_lvl = 0
+        self.network_lvl = 1
 
         # State type
         self.deterministic_model = 0
@@ -79,7 +87,7 @@ class InfrastructuresPlanner:
         # Network[birdge #1(Category #1(#Elements), Category #2(#Elements)), 
         #         bridge #2(Category #1(#Elements), Category #2(#Elements))]
         self.net_data = np.array([
-                                [[2],[2]],
+                                [[2],[3]],
                                 [[2],[2]]
                                 ])
         self.num_c = [ len(listElem) for listElem in self.net_data]
@@ -91,7 +99,7 @@ class InfrastructuresPlanner:
         self.cb = np.array(0)
         self.cc = np.array(0)
         self.ci = np.array(0)
-        self.ec = np.array(0)
+        self.ec = np.array(0) # element index tracker can be in the state vector, also faciltates generateing a new inspector
 
         # inspection data
         self.max_cond = np.array(100)
@@ -309,7 +317,7 @@ class InfrastructuresPlanner:
         self.cb = 0
         self.cc = 0
         self.ci = 0
-        self.ec = self.num_e[self.cb,self.cc,self.ci]
+        self.ec = self.num_e[self.cb,self.cc,0]
 
     def step(self, action): # action is a scalar
         # action 
@@ -435,6 +443,7 @@ class InfrastructuresPlanner:
             state_sum = np.sum(self.c_Ex[self.cb, :, 0 ])
 
         for i in range(self.num_c[self.cb]):
+
             # state on goal
             goal_dim = 0
 
@@ -447,6 +456,9 @@ class InfrastructuresPlanner:
 
             # element in category
             self.cc = min_cat_cond[i]
+
+            # reset the element tracker for each category 
+            self.ec = self.num_e[self.cb,self.cc,0]
 
             # get category goal from bridge goal
             goal_cat = self.goal_bridge_to_category(new_goal, state_sum)
@@ -743,7 +755,10 @@ class InfrastructuresPlanner:
         if action == 0: # do nothing
             # space transformation to know min value in the transformed space
             min_cond,_ = self.ST.original_to_transformed(self.min_cond)
-            cond_1 = self.cs[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0]<=min_cond
+            cond_1 = self.cs[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0] <= min_cond
+            if self.num_e[self.cb,self.cc, 0] < self.num_e.max():
+                check_1 = self.cs[self.cb, self.cc, :, 0] != 0
+                cond_1 = np.concatenate((cond_1, check_1[self.num_e[self.cb,self.cc, 0]:]))
             if cond_1[self.ci]:
                 self.cs[self.cb, self.cc, cond_1, 0]=min_cond
                 next_state = self.cs[self.cb, self.cc, self.ci, :]
