@@ -31,10 +31,10 @@ class InfrastructuresPlanner:
     """
     def reset(self):
         # Analyses level
-        self.element_lvl = 0
+        self.element_lvl = 1
         self.category_lvl = 0
         self.bridge_lvl = 0
-        self.network_lvl = 1
+        self.network_lvl = 0
 
         # State type
         self.deterministic_model = 0
@@ -81,7 +81,7 @@ class InfrastructuresPlanner:
         self.svd = np.linalg.svd
         # time props
         self.dt = 1        # time step size
-        self.total_years = 1000           # total time steps
+        self.total_years = 100           # total time steps
         self.seed = np.random.seed
         # network props
         # Network[birdge #1(Category #1(#Elements), Category #2(#Elements)), 
@@ -214,7 +214,7 @@ class InfrastructuresPlanner:
         self.element_critical_speed = -2.5
         self.s_goal = 70
         self.action_costs = np.array([[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]])
-        self.fund_priority = np.random.rand(self.total_years)
+        self.fund_priority = np.random.rand(self.total_years+1)
         self.shutdown_cost = 1
         self.prev_shutdown = 0
         self.prev_action = 0
@@ -234,7 +234,9 @@ class InfrastructuresPlanner:
         # Performance Measures
         self.compatiblity = 0
         self.criticality = 0
-        self.compatiblity_h = 0
+        self.compatibility_cat = 0
+        self.compatibility_bridge = 0
+        self.compatibility_net = 0
         self.variablity = 0
 
         # plotting
@@ -344,7 +346,9 @@ class InfrastructuresPlanner:
         # done
         done = 0
         # info
-        info = {}
+        info = {'e_compatibility': 1 - self.compatiblity/self.current_year, 'e_criticality': self.criticality/self.current_year,\
+                'c_compatibility': 1 - self.compatibility_cat/self.current_year, 'b_compatibility': 1 - self.compatibility_bridge/self.current_year,\
+                'n_compatibility': 1 - self.compatibility_net/self.current_year}
         return observation, reward, done, info
     """ Environment Actions ########################################################################################################
 
@@ -1220,7 +1224,7 @@ class InfrastructuresPlanner:
         state = self.reset()
         self.expert_model = 1
         self.include_budget = 0
-        years = np.arange(0,100)
+        years = np.arange(0,self.total_years)
         mu_vec = np.zeros([3,np.max(years)+1])
         var_vec = np.zeros([3,3,np.max(years)+1])
         reward_vec = np.nan * np.zeros(np.max(years)+1)
@@ -1229,16 +1233,30 @@ class InfrastructuresPlanner:
         R = np.nan * np.zeros(np.max(years)+1)
         state_action = []
         state_noaction = []
-        total_reward = 0
+        episode_reward = 0
+        total_rewards = 0
+        total_compt_ = 0
+        total_crtic_ = 0
+        compt_ = 0
+        crtic_ = 0 
         ep = 0
         while ep < episodes_num:
-            for k in range(100):
+            for k in range(self.total_years):
                 prev_state = copy.copy(state[0])
                 goal = self.expert_framework(state)
-                state, reward, _, _ = self.step(goal)
-                total_reward += reward
-                reward_vec[k] = total_reward
+                state, reward, _, step_info = self.step(goal)
+                episode_reward += reward
+                reward_vec[k] = episode_reward
                 goal_vec[k] = goal
+                if self.element_lvl:
+                    compt_ += step_info['e_compatibility']
+                    crtic_ += step_info['e_criticality']
+                elif self.category_lvl:
+                    compt_ += step_info['c_compatibility']
+                elif self.bridge_lvl:
+                    compt_ += step_info['b_compatibility']
+                else:
+                    compt_ += step_info['n_compatibility']
                 if episodes_num == 1:
                     if self.deterministic_model:
                         if self.element_lvl:
@@ -1285,13 +1303,25 @@ class InfrastructuresPlanner:
                                 R[k] = self.inspector_std[self.inspector[0],1]**2
                 else:
                     state_action.append(prev_state) if goal > 0 else state_noaction.append(prev_state)
+            total_rewards += episode_reward
+            total_compt_ += compt_/self.total_years
             ep += 1
-            print(f" Total rewards: {total_reward:.3f}")
+            if episodes_num != 1:
+                if self.element_lvl:
+                    total_crtic_ += crtic_/self.total_years
+                    print(f"Episode rewards: {episode_reward:.2f}; compatibility: {100*compt_/self.total_years:.0f}%; criticality: {100*crtic_/self.total_years:.0f}%")
+                else:
+                    print(f"Episode rewards: {episode_reward:.2f}; compatibility: {100*compt_/self.total_years:.0f}%")
             state = self.reset()
             self.expert_model = 1
             self.include_budget = 0
-            total_reward = 0
-
+            episode_reward = 0
+            compt_ = 0
+            crtic_ = 0
+        if self.element_lvl:
+            print(f'> Total Rewards: {total_rewards:.1f}, Average Compatibility: {100*total_compt_/episodes_num:.1f}%, Average Criticality: {100*total_crtic_/episodes_num:.1f}%')
+        else:
+            print(f'> Total Rewards: {total_rewards:.1f}, Average Compatibility: {100*total_compt_/episodes_num:.1f}%')
         fig = plt.figure(1)
         fig.clf()
         if episodes_num == 1:
@@ -1368,40 +1398,40 @@ class InfrastructuresPlanner:
         # check goal compatiblity
         if self.deterministic_model == 0:
             if self.c_Ex[self.cb, self.cc, 0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_cat += 1
             elif np.any(self.c_Ex[self.cb, self.cc,0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_cat += 1
         else:
             if self.c_cs[self.cb, self.cc, 0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_cat += 1
             elif np.any(self.c_cs[self.cb, self.cc,0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_cat += 1
     
     def compatibility_goal_bridge(self, goal):
         # check goal compatiblity
         if self.deterministic_model == 0:
             if self.b_Ex[self.cb,0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_bridge += 1
             elif np.any(self.b_Ex[self.cc,0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_bridge += 1
         else:
             if self.b_cs[self.cb,0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_bridge += 1
             elif np.any(self.b_cs[self.cc,0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_bridge += 1
     
     def compatibility_goal_network(self, goal):
         # check goal compatiblity
         if self.deterministic_model == 0:
             if self.net_Ex[0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_net += 1
             elif np.any(self.net_Ex[0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_net += 1
         else:
             if self.net_cs[0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
-                self.compatiblity_h += 1
+                self.compatibility_net += 1
             elif np.any(self.net_cs[0] < self.shutdown_cond) and goal <= 0:
-                self.compatiblity_h += 1
+                self.compatibility_net += 1
     
     """ Fixed Decision maker  ########################################################################################################
         expert_framework
@@ -1479,11 +1509,11 @@ class InfrastructuresPlanner:
         return index_a
     
     def goal_bridge_to_category(self, goal, state_sum):
-        cat_goal = ( self.c_cs[self.cb,self.cc,0]/ state_sum) * goal if self.deterministic_model else ( self.c_Ex[self.cb,self.cc,0]/ state_sum ) * goal
+        cat_goal = ( self.c_cs[self.cb,self.cc,0]/ state_sum) * goal * self.num_c[self.cb] if self.deterministic_model else ( self.c_Ex[self.cb,self.cc,0]/ state_sum ) * goal * self.num_c[self.cb]
         return cat_goal
     
     def goal_network_to_bridge(self, goal, state_sum):
-        bridge_goal = ( self.b_cs[self.cb,0]/ state_sum) * goal if self.deterministic_model else ( self.b_Ex[self.cb,0]/ state_sum ) * goal
+        bridge_goal = ( self.b_cs[self.cb,0]/ state_sum) * goal * self.num_b if self.deterministic_model else ( self.b_Ex[self.cb,0]/ state_sum ) * goal * self.num_b
         return bridge_goal
 
     def goal_to_action(self, goal):
