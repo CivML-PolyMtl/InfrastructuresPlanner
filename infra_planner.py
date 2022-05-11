@@ -1220,7 +1220,7 @@ class InfrastructuresPlanner:
         test_env
         
     """  
-    def test_env(self, episodes_num):
+    def test_env(self, episodes_num, test_agent, agent_model = None):
         state = self.reset()
         self.expert_model = 1
         self.include_budget = 0
@@ -1243,6 +1243,10 @@ class InfrastructuresPlanner:
         while ep < episodes_num:
             for k in range(self.total_years):
                 prev_state = copy.copy(state[0])
+                if test_agent == 1:
+                    goal = np.argmax(agent_model(state).cpu().detach().numpy())
+                else:
+                    goal = self.expert_framework(state)
                 goal = self.expert_framework(state)
                 state, reward, _, step_info = self.step(goal)
                 episode_reward += reward
