@@ -6,6 +6,7 @@
     Webpage: https://zachamida.github.io
 
 """
+from audioop import mul
 from decision_makers import decision_maker
 from gym import spaces
 import numpy as np
@@ -32,8 +33,8 @@ class InfrastructuresPlanner:
     def reset(self):
         # Analyses level
         self.element_lvl = 0
-        self.category_lvl = 1
-        self.bridge_lvl = 0
+        self.category_lvl = 0
+        self.bridge_lvl = 1
         self.network_lvl = 0
 
         # State type
@@ -72,7 +73,7 @@ class InfrastructuresPlanner:
         # Network[birdge #1(Category #1(#Elements), Category #2(#Elements)), 
         #         bridge #2(Category #1(#Elements), Category #2(#Elements))]
         self.net_data = np.array([
-                                [[3],[3]],
+                                [[8],[2]],
                                 [[2],[2]]
                                 ])
         self.num_c = [ len(listElem) for listElem in self.net_data]
@@ -814,8 +815,8 @@ class InfrastructuresPlanner:
         if action == 0:
             int_noise = np.array(np.zeros(3))
         else:
-            true_mu = self.int_true[action-1,:]
-            true_Sigma = np.diag(self.int_true_var[action-1,:])
+            true_mu = copy.copy(self.int_true[action-1,:])
+            true_Sigma = copy.copy(np.diag(self.int_true_var[action-1,:]))
             # check for action frequency
             if self.actions_hist[self.cb, self.cc, self.ci, action] != self.total_years :
                 ind_year = 2 * (self.current_year - self.actions_hist[self.cb, self.cc, self.ci, action])
@@ -841,8 +842,8 @@ class InfrastructuresPlanner:
             Q_int = np.zeros([6,6])
             self.Am[0:3,3:6] = np.zeros([3,3])
         else:
-            int_mu = self.int_Ex[0][action-1]
-            int_Sigma = np.diag(self.int_var[0][action-1])
+            int_mu = copy.copy(self.int_Ex[0][action-1])
+            int_Sigma = copy.copy(np.diag(self.int_var[0][action-1]))
             Q_int = self.int_Q[action-1]
             self.Am[0:3,3:6] = np.eye(3)
         all_noise = sp.block_diag(self.Q,np.zeros([3,3])) + Q_int
@@ -1050,14 +1051,23 @@ class InfrastructuresPlanner:
             state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 2])
             state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 3])
             state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 4])
-        else:
+        elif self.category_lvl:
             # number of years without an action
             act_time = np.ceil(self.act_timer/self.num_e[self.cb, self.cc, 0])
             state = np.append(state, act_time)
             state = np.append(state, self.variablity)
-        #state = np.append(state, self.bridge_priority)
-        #state = np.append(state, self.x_budget[0]/5e5)
-        #state = np.append(state, self.ec)
+        elif self.bridge_lvl:
+            act_time = np.ceil(self.act_timer/self.num_c[self.cb])
+            state = np.append(state, act_time)
+            state = np.append(state, self.variablity)
+        else:
+            act_time = np.ceil(self.act_timer/self.num_b)
+            state = np.append(state, act_time)
+            state = np.append(state, self.variablity)
+        if self.include_budget:
+                state = np.append(state, self.bridge_priority)
+                state = np.append(state, self.x_budget[0])
+
         return state
     
     def state_element_prep(self):
@@ -1566,9 +1576,9 @@ class MixtureEstimate:
         pass
 
     def gaussian_mixture(self, weight, mu, var):
-        mu_mix = np.empty(mu.shape)
-        var_mix = np.empty(var.shape)
-        mix_var = np.empty(var_mix.shape)
+        mu_mix = np.zeros(mu.shape) * np.nan
+        var_mix = np.zeros(var.shape) * np.nan
+        mix_var = np.zeros(var_mix.shape) * np.nan
         for i in range(weight.size):
             mu_mix[i,:] = weight[i] * mu[i,:]
             var_mix[i,:, :] =  weight[i] * var[i,:, :]
