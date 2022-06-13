@@ -33,8 +33,8 @@ class InfrastructuresPlanner:
     def reset(self):
         # Analyses level
         self.element_lvl = 0
-        self.category_lvl = 0
-        self.bridge_lvl = 1
+        self.category_lvl = 1
+        self.bridge_lvl = 0
         self.network_lvl = 0
 
         # State type
@@ -79,7 +79,7 @@ class InfrastructuresPlanner:
         self.num_c = [ len(listElem) for listElem in self.net_data]
         self.num_b = self.net_data.shape[0]
         self.num_e = self.net_data
-        self.initial_state = np.zeros([self.num_b, np.max(self.num_c), self.num_e.max(),3])
+        self.initial_state = np.zeros([self.num_b, np.max(self.num_c), np.max(np.max(self.num_e)),3])
 
         # indicators
         self.cb = np.array(0)
@@ -220,7 +220,10 @@ class InfrastructuresPlanner:
         self.element_critical_cond = 30
         self.element_critical_speed = -2.5
         self.s_goal = 70
-        self.action_costs = np.array([[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]])
+        self.action_costs = np.array([[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
+                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
+                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
+                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]])
         self.fund_priority = np.random.rand(self.total_years+1)
         self.shutdown_cost = 1
         self.prev_shutdown = 0
@@ -1455,12 +1458,12 @@ class InfrastructuresPlanner:
         if self.deterministic_model == 0:
             if self.b_Ex[self.cb,0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
                 self.compatibility_bridge += 1
-            elif np.any(self.b_Ex[self.cc,0] < self.shutdown_cond) and goal <= 0:
+            elif np.any(self.b_Ex[self.cb,0] < self.shutdown_cond) and goal <= 0:
                 self.compatibility_bridge += 1
         else:
             if self.b_cs[self.cb,0] > self.functional_cond and goal > 0.9 * (1 - self.functional_cond / self.max_cond) :
                 self.compatibility_bridge += 1
-            elif np.any(self.b_cs[self.cc,0] < self.shutdown_cond) and goal <= 0:
+            elif np.any(self.b_cs[self.cb,0] < self.shutdown_cond) and goal <= 0:
                 self.compatibility_bridge += 1
     
     def compatibility_goal_network(self, goal):
