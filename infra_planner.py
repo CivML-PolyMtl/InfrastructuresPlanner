@@ -6,7 +6,6 @@
     Webpage: https://zachamida.github.io
 
 """
-from audioop import mul
 from decision_makers import decision_maker
 from gym import spaces
 import numpy as np
@@ -20,9 +19,13 @@ import scipy.interpolate as interpolate
 import matplotlib.pyplot as plt
 from os.path import join as pjoin
 
+from torch import seed
 
-class InfrastructuresPlanner:
-    def __init__(self):
+
+class infra_planner:
+    def __init__(self, fixed_seed=0):
+        self.fixed_seed = fixed_seed
+        self.seed = 0
         self.reset()
 
     """ Initial Environment Run ########################################################################################################
@@ -33,8 +36,8 @@ class InfrastructuresPlanner:
     def reset(self):
         # Analyses level
         self.element_lvl = 0
-        self.category_lvl = 1
-        self.bridge_lvl = 0
+        self.category_lvl = 0
+        self.bridge_lvl = 1
         self.network_lvl = 0
 
         # State type
@@ -57,8 +60,8 @@ class InfrastructuresPlanner:
             self.action_space = spaces.Discrete(2)
 
         # condition | speed | variablity 
-        high = np.array([100, 0, 100] , dtype=np.float32)
-        low = np.array([0, -20, 0] , dtype=np.float32)
+        high = np.array([100, 0, 100, 100] , dtype=np.float32)
+        low = np.array([0, -20, 0, 0] , dtype=np.float32)
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.metadata = 'Infrastructures deterioration environment'
@@ -68,13 +71,17 @@ class InfrastructuresPlanner:
         # time props
         self.dt = 1        # time step size
         self.total_years = 100           # total time steps
-        self.seed = np.random.seed
+        if self.fixed_seed:
+            np.random.seed(self.seed)
         # network props
         # Network[birdge #1(Category #1(#Elements), Category #2(#Elements)), 
         #         bridge #2(Category #1(#Elements), Category #2(#Elements))]
         self.net_data = np.array([
-                                [[8],[2]],
-                                [[2],[2]]
+                                [[5],[5],[5],[5],[5]],
+                                [[3],[3],[3],[3],[3]],
+                                [[3],[3],[3],[3],[3]],
+                                [[3],[3],[3],[3],[3]],
+                                [[3],[3],[3],[3],[3]],
                                 ])
         self.num_c = [ len(listElem) for listElem in self.net_data]
         self.num_b = self.net_data.shape[0]
@@ -266,7 +273,7 @@ class InfrastructuresPlanner:
         # Agnets
         DM = decision_maker(self.int_Ex, self.include_budget, self.shutdown_cond, self.discrete_actions)
         self.agent_element_discrete = DM.agent_element_lvl_discrete
-        self.agent_high_discrete = DM.agent_high_lvl_discrete
+        self.agent_high_discrete = DM.agent_high_lvl_discrete #agent_high_lvl_discrete_NN
         self.agent_one_element = DM.agent_one_element_lvl
         self.agent_element = DM.agent_multi_element_lvl
         self.agent_category = DM.agent_high_lvl
@@ -340,34 +347,41 @@ class InfrastructuresPlanner:
         self.ci = 0
         self.ec = self.num_e[self.cb,self.cc,0]
 
-    def step(self, action): # action is a scalar
-        # action 
-        if self.network_lvl:
-            if self.discrete_actions:
-                _, _, reward, observation = self.network_action_discrete(action)
-            else:
-                _, _, reward, observation = self.network_action(action)
-        elif self.bridge_lvl:
-            if self.discrete_actions:
-                _, _, reward, observation = self.bridge_action_discrete(action)
-            else:
-                _, _, reward, observation = self.bridge_action(action)
-        elif self.category_lvl:
-            if self.discrete_actions:
-                _, _, reward, observation = self.cat_action_discrete(action)
-            else:
-                _, _, reward, observation = self.cat_action(action)
-        elif self.element_lvl:
-            if self.discrete_actions:
-                _, _, reward, observation = self.elem_action_discrete(action)
-            else:
-                _, _, reward, observation = self.elem_action(action)
+    def step(self, action): # action is a scalar\
+        # automatic restart when the last year is reached
+        if self.current_year == self.total_years:
+            observation = self.reset()
+            reward = 0
+        else:
+            # action 
+            if self.network_lvl:
+                if self.discrete_actions:
+                    _, _, reward, observation = self.network_action_discrete(action)
+                else:
+                    _, _, reward, observation = self.network_action(action)
+            elif self.bridge_lvl:
+                if self.discrete_actions:
+                    _, _, reward, observation = self.bridge_action_discrete(action)
+                else:
+                    _, _, reward, observation = self.bridge_action(action)
+            elif self.category_lvl:
+                if self.discrete_actions:
+                    _, _, reward, observation = self.cat_action_discrete(action)
+                else:
+                    _, _, reward, observation = self.cat_action(action)
+            elif self.element_lvl:
+                if self.discrete_actions:
+                    _, _, reward, observation = self.elem_action_discrete(action)
+                else:
+                    _, _, reward, observation = self.elem_action(action)
         # done
-        done = 0
+        done = 0 
+
         # info
         info = {'e_compatibility': 1 - self.compatiblity/self.current_year, 'e_criticality': self.criticality/self.current_year,\
                 'c_compatibility': 1 - self.compatibility_cat/self.current_year, 'b_compatibility': 1 - self.compatibility_bridge/self.current_year,\
                 'n_compatibility': 1 - self.compatibility_net/self.current_year}
+
         return observation, reward, done, info
     """ Environment Actions ########################################################################################################
 
@@ -637,14 +651,14 @@ class InfrastructuresPlanner:
         act_check = self.check_action_limits()
         # shutdown cost
         if self.shutdown_cost:
-            sc_act =  self.action_costs[self.cc][action]
+            sc_act =  -1 + 1.5 * self.action_costs[self.cc][action]
             self.shutdown_cost = 0
             self.prev_action = action
         else:
             if self.prev_action >= action:
                 sc_act = 0
             else:
-                sc_act = self.action_costs[self.cc][action] - self.action_costs[self.cc][self.prev_action]
+                sc_act = -1 + 1.5 * (self.action_costs[self.cc][action] - self.action_costs[self.cc][self.prev_action])
                 self.prev_action = action
 
         if action>0 :
@@ -822,7 +836,7 @@ class InfrastructuresPlanner:
             true_Sigma = copy.copy(np.diag(self.int_true_var[action-1,:]))
             # check for action frequency
             if self.actions_hist[self.cb, self.cc, self.ci, action] != self.total_years :
-                ind_year = 2 * (self.current_year - self.actions_hist[self.cb, self.cc, self.ci, action])
+                ind_year =  (self.current_year - self.actions_hist[self.cb, self.cc, self.ci, action]) * 2
                 if ind_year > self.CDF['CDF'][0,action-1].size-1:
                     ind_year = self.CDF['CDF'][0,action-1].size-1
                 self.alpha1 = self.CDF['CDF'][0,action-1][0,int(ind_year)]
@@ -1011,7 +1025,7 @@ class InfrastructuresPlanner:
             self.b_cs[self.cb,:] = Ex_b
     
     def network_state_update(self):
-        weigts = np.ones(np.size(self.num_b))/self.num_b
+        weigts = np.ones(self.num_b)/self.num_b
         if self.deterministic_model == 0:
             Ex_net, Var_net = self.ME.gaussian_mixture(weigts, self.b_Ex[:], self.b_Var[:])
             self.net_Ex = Ex_net
@@ -1252,19 +1266,21 @@ class InfrastructuresPlanner:
         test_env
         
     """  
-    def test_env(self, episodes_num, test_agent, agent_model = None):
+    def test_env(self, episodes_num):
         state = self.reset()
+        test_seed = np.random.randint(episodes_num, size = episodes_num)
         self.expert_model = 1
         self.include_budget = 0
-        years = np.arange(0,self.total_years)
-        mu_vec = np.zeros([3,np.max(years)+1])
-        var_vec = np.zeros([3,3,np.max(years)+1])
-        mu_vec_true = np.zeros([3,np.max(years)+1])
-        var_vec_true = np.zeros([3,3,np.max(years)+1])
-        reward_vec = np.nan * np.zeros(np.max(years)+1)
-        goal_vec = np.nan * np.zeros(np.max(years)+1)
-        obs = np.nan * np.zeros(np.max(years)+1)
-        R = np.nan * np.zeros(np.max(years)+1)
+        total_years = self.total_years - 1
+        years = np.arange(0, total_years)
+        mu_vec = np.zeros([3,total_years])
+        var_vec = np.zeros([3,3,total_years])
+        mu_vec_true = np.zeros([3,total_years])
+        var_vec_true = np.zeros([3,3,total_years])
+        reward_vec = np.nan * np.zeros(total_years)
+        goal_vec = np.nan * np.zeros(total_years)
+        obs = np.nan * np.zeros(total_years)
+        R = np.nan * np.zeros(total_years)
         state_action = []
         state_noaction = []
         episode_reward = 0
@@ -1275,7 +1291,8 @@ class InfrastructuresPlanner:
         crtic_ = 0 
         ep = 0
         while ep < episodes_num:
-            for k in range(self.total_years):
+            self.seed = test_seed[ep]
+            for k in range(total_years):
                 prev_state = copy.copy(state[0])
                 goal = self.decision_maker(state)
                 state, reward, _, step_info = self.step(goal)
@@ -1343,14 +1360,14 @@ class InfrastructuresPlanner:
                 else:
                     state_action.append(prev_state) if goal > 0 else state_noaction.append(prev_state)
             total_rewards += episode_reward
-            total_compt_ += compt_/self.total_years
+            total_compt_ += compt_/total_years
             ep += 1
             if episodes_num != 1:
                 if self.element_lvl:
-                    total_crtic_ += crtic_/self.total_years
-                    print(f"Episode rewards: {episode_reward:.2f}; compatibility: {100*compt_/self.total_years:.0f}%; criticality: {100*crtic_/self.total_years:.0f}%")
+                    total_crtic_ += crtic_/total_years
+                    print(f"Episode {ep:.0f} rewards: {episode_reward:.2f}; compatibility: {100*compt_/total_years:.0f}%; criticality: {100*crtic_/total_years:.0f}%")
                 else:
-                    print(f"Episode rewards: {episode_reward:.2f}; compatibility: {100*compt_/self.total_years:.0f}%")
+                    print(f"Episode {ep:.0f} rewards: {episode_reward:.2f}; compatibility: {100*compt_/total_years:.0f}%")
             state = self.reset()
             self.expert_model = 1
             self.include_budget = 0
