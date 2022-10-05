@@ -6,7 +6,7 @@
     Webpage: https://zachamida.github.io
 
 """
-from envs.InfrastructuresPlanner.decision_makers import decision_maker
+from decision_makers import decision_maker
 from gym import spaces
 import numpy as np
 import math as mt
