@@ -233,23 +233,6 @@ class decision_maker:
     def evaluate_agent_bridge(self, state, cb = 0):
         if cb == 0:
             action = torch.argmax(self.policy_bridge_1(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-        x = np.arange(25, 100, 0.1)
-        y = np.arange(0, -3, -0.05)
-        x_, y_ = np.meshgrid(x, y)
-        action_map=np.zeros([y.size,x.size])
-        for i in range(y.size):
-            for j in range(x.size):
-                action_map[i,j] = torch.argmax(self.policy_bridge_1(torch.FloatTensor([x_[i,j],y_[i,j], 20]).to(device)), dim = 1).cpu().detach().numpy() #(self.policy_nn(torch.FloatTensor([x_[i,j],y_[i,j]]).to(device))).cpu().detach().numpy()[0,1]/torch.max(self.policy_nn(torch.FloatTensor([x_[i,j],y_[i,j]]).to(device))).cpu().detach().numpy()
-        import matplotlib.pyplot as plt 
-        from mpl_toolkits.mplot3d import Axes3D
-        plt.pcolor(x_,y_,action_map)
-        plt.axvline(x=55)
-        plt.axhline(y=-1.5)
-        plt.xlabel('Condition $\mu_t$')
-        plt.ylabel('Speed $\dot{\mu}_t$')
-        #plt.title('Action $a_1$')
-        plt.colorbar()
-        plt.show()
         return action[0]
 
     def plot_policy(self, save_policy = 0):
