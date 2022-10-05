@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import numpy as np
 import os
-#from network import policy_net
+from network import policy_net
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -14,7 +14,7 @@ class decision_maker:
         self.exp_interval = np.random.randint(2,10,1)
         self.shutdown_cond = shutdown_cond
         self.discrete_actions = discrete_actions
-        self.file_name =''#'params-hrl-infra_env-it(100000)-[19, 0].tar'#'params-hrl-infra_env-it(100000)-[16, 3].tar'
+        self.file_name = ''#'params-hrl-infra_env-it(100000)-[1, 14].tar'#'params-hrl-infra_env-it(100000)-[19, 0].tar'#'params-hrl-infra_env-it(100000)-[16, 3].tar'
         if self.file_name !='':
             self.policy_nn = policy_net(action_size=2).to(device)
             self.policy_net = self.load_agent(self.file_name)
@@ -84,9 +84,9 @@ class decision_maker:
         if self.discrete_actions:
             if state[0] <= self.shutdown_cond:
                 goal = (100-state[0])/75
-            elif state[0] < 55 or state[3] > 30:
+            elif state[0] < 55 or state[3] > 15:
                 goal = self.int_Ex[0][2,0]/75
-            elif state[0] < 70 or state[3] > 15:
+            elif state[0] < 70 or state[3] > 10:
                 goal = self.int_Ex[0][1,0]/75
             else:
                 goal = self.int_Ex[0][0,0]/75

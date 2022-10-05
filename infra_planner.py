@@ -6,7 +6,7 @@
     Webpage: https://zachamida.github.io
 
 """
-from decision_makers import decision_maker
+from envs.InfrastructuresPlanner.decision_makers import decision_maker
 from gym import spaces
 import numpy as np
 import math as mt
@@ -24,44 +24,50 @@ from torch import seed
 
 class infra_planner:
     def __init__(self, fixed_seed=0):
-        self.fixed_seed = fixed_seed
-        self.seed = 0
-        self.reset()
-
-    """ Initial Environment Run ########################################################################################################
-
-        reset : reset the env
-
-    """
-    def reset(self):
         # Analyses level
-        self.element_lvl = 0
+        self.element_lvl = 1
         self.category_lvl = 0
-        self.bridge_lvl = 1
+        self.bridge_lvl = 0
         self.network_lvl = 0
-
+        
         # State type
-        self.deterministic_model = 0
+        self.deterministic_model = 1
 
         # action type
         self.discrete_actions = 1
 
         # budget
         self.include_budget = 0
-        self.max_budget = 1e4
-        self.min_budget = 1e3
-        self.budget = np.random.uniform(self.min_budget, self.max_budget)
-
-        # plotting    
-        self.plotting = 0
+        self.max_budget = 10
+        self.min_budget = 0.5
 
         # actions and observations
-        if self.discrete_actions:
+        if self.discrete_actions == 0 :
+            self.action_space = spaces.Discrete(5)
+        elif self.discrete_actions :
             self.action_space = spaces.Discrete(2)
 
-        # condition | speed | variablity 
-        high = np.array([100, 0, 100, 100] , dtype=np.float32)
-        low = np.array([0, -20, 0, 0] , dtype=np.float32)
+        # condition | speed | time since last action |or| variablity 
+        if self.element_lvl:
+            high = np.array([100, 0] , dtype=np.float32)
+            low = np.array([0, -20] , dtype=np.float32)
+        elif self.category_lvl:
+            high = np.array([100, 0, 100, 100] , dtype=np.float32)
+            low = np.array([0, -20, 0 ,0] , dtype=np.float32)
+        elif self.bridge_lvl:
+            high = np.array([100, 0, 100] , dtype=np.float32)
+            low = np.array([0, -20, 0] , dtype=np.float32)
+        elif self.network_lvl:
+            # Network of bridges
+            high = np.array([100, 0, 100, 0, 100, 0, 100, 0, 100, 0, 100, 50], dtype=np.float32)
+            low = np.array([0, -20, 0, -20, 0, -20, 0, -20, 0, -20, 0, 0], dtype=np.float32)
+
+        if self.include_budget:
+            high = np.append(high, 1)
+            high = np.append(high, self.max_budget)
+            low = np.append(low, 1)
+            low = np.append(low, self.min_budget)
+        
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
 
         self.metadata = 'Infrastructures deterioration environment'
@@ -69,84 +75,112 @@ class infra_planner:
         self.inv = np.linalg.pinv
         self.svd = np.linalg.svd
         # time props
-        self.dt = 1        # time step size
+        self.dt = 1                      # time step size
         self.total_years = 100           # total time steps
-        if self.fixed_seed:
-            np.random.seed(self.seed)
+
         # network props
         # Network[birdge #1(Category #1(#Elements), Category #2(#Elements)), 
-        #         bridge #2(Category #1(#Elements), Category #2(#Elements))]
+        #         bridge #2(Category #1(#Elements), Category #2(#Elements))
+        #           .       .   .   .   .       .   .   .       .   .   .   
+        #         bridge #B(Category #1(#Elements), Category #2(#Elements))  ]
         self.net_data = np.array([
-                                [[5],[5],[5],[5],[5]],
-                                [[3],[3],[3],[3],[3]],
-                                [[3],[3],[3],[3],[3]],
-                                [[3],[3],[3],[3],[3]],
-                                [[3],[3],[3],[3],[3]],
+                                [[15],[2],[3],[2],[4],[3]],
+                                [[2],[2],[2],[2],[2],[2]],
+                                [[2],[2],[2],[2],[2],[2]],
+                                [[2],[2],[2],[2],[2],[2]],
+                                [[2],[2],[2],[2],[2],[2]],
                                 ])
-        self.num_c = [ len(listElem) for listElem in self.net_data]
-        self.num_b = self.net_data.shape[0]
-        self.num_e = self.net_data
-        self.initial_state = np.zeros([self.num_b, np.max(self.num_c), np.max(np.max(self.num_e)),3])
+
+        # plotting    
+        self.plotting = 0
+
+        # Environment Seed
+        self.fixed_seed = fixed_seed
+        self.seed = 1
+        # Env. Reset
+        # self.reset()
+
+    """ Initial Environment Run ########################################################################################################
+
+        reset : reset the env
+
+    """
+    def reset(self):
+        #seeds = np.random.randint(0,1000)
+        if self.fixed_seed != 0:
+            np.random.seed(self.seed)
+        else:
+            np.random.seed(None)
+
+        self.budget = np.random.uniform(self.min_budget, self.max_budget)
+
+        # reset number of bridges, structural categories and elements
+        self.num_c = [ len(listElem) for listElem in self.net_data] # structural categories
+        self.num_b = self.net_data.shape[0]                         # number of bridges
+        self.num_e = self.net_data                                  # number of structural elements
+        self.initial_state = np.zeros([self.num_b, np.max(self.num_c), np.max(np.max(self.num_e)),3]) 
 
         # indicators
-        self.cb = np.array(0)
-        self.cc = np.array(0)
-        self.ci = np.array(0)
-        self.ec = np.array(0) # element index tracker can be in the state vector, also faciltates generateing a new inspector
+        self.cb = np.array(0) # current bridge
+        self.cc = np.array(0) # current structural category
+        self.ci = np.array(0) # current structural element
+        self.ec = np.array(0) # element index tracker can be utlized in the state vector, also faciltates generateing a new inspector
+        self.struc_tracker = 0  # track the structures that have been maintained
+        self.worst_cat_ind = 1  # to track if the worst structural category in the bridge has been maintained or not
 
         # inspection data
-        self.max_cond = np.array(100)
-        self.max_cond_decay = 0.999
-        self.min_cond = np.array(25)
-        self.y = np.nan * np.zeros([self.num_c[self.cb], np.max(self.num_e[self.cb,:, 0])])
-        self.inspection_frq = np.random.randint(3,4,self.num_b)
-        self.inspector_std = np.array(range(0,223))
-        self.inspector_std = np.c_[self.inspector_std, np.random.uniform(1,6,223)]
+        self.max_cond = np.array(100)                       # dynamic max health condition u_t
+        self.max_cond_original = copy.copy(self.max_cond)   # fixed max health condition u_t
+        self.max_cond_decay = 0.999                         # decay factor for max health condition 
+        self.min_cond = np.array(25)                        # fixed min health condition 
+        self.b_min_functional_state = [85, 15]              # min. accpetable functional state of the bridge [condition, variablity in structural categories]
+
+        self.min_high_cond = 0                              # track the ID of the sorted condition from min. condition to high condition
+        self.y = np.nan * np.zeros([self.num_c[self.cb], np.max(self.num_e[self.cb,:, 0])]) # inspection data y
+        self.inspection_frq = np.random.randint(3,4,self.num_b)                             # inspection frequency 
+        self.inspector_std = np.array(range(0,223))                                         # inspector ID
+        self.inspector_std = np.c_[self.inspector_std, np.random.uniform(1,6,223)]          # inspectors' error std.
 
         # kenimatic model
-        self.F = np.array([1, 0, 0])
-        self.A = np.array([[1, self.dt, (self.dt ** 2) / 2], [0, 1, self.dt], [0, 0, 1]])
-        sigma_w = 0.005
+        self.F = np.array([1, 0, 0])                                                        # observation matrix
+        self.A = np.array([[1, self.dt, (self.dt ** 2) / 2], [0, 1, self.dt], [0, 0, 1]])   # transition model
+        sigma_w = 0.005                                                                     # process error std. for the kenimatic model
         self.Q = sigma_w** 2 * np.array([[(self.dt ** 5) / 20, (self.dt ** 4) / 8, (self.dt ** 3) / 6],
                                       [(self.dt ** 4) / 8, (self.dt ** 3) / 3, (self.dt ** 2) / 2],
                                       [(self.dt ** 3) / 6, (self.dt ** 2) / 2, self.dt]])  # Process error (covariance)
         # budget model
-        self.A_budget = np.array([[0, 1, 1], [0, 1, 0], [0, 0, 1]])
-        self.x_budget = np.array([0, 0, 0])
-        self.Q_budget = 0.5 * np.array([[1, 0, 0],[0, 1, 0],[0, 0, 1]]) 
-        self.bridge_priority = np.random.uniform(0.1,0.3) # bridge priority 
+        self.A_budget = np.array([[0, 1, 1], [0, 1, 0], [0, 0, 1]])                        # transition model for the budget
+        self.x_budget = np.array([0, 0, 0])                                                # vector of available budget, cost, income 
+        self.Q_budget = 0.5 * np.array([[1, 0, 0],[0, 1, 0],[0, 0, 1]])                    # process error for the transition model of the budget
+        self.bridge_priority = np.random.uniform(0.1,0.3)                                  # bridge priority index
 
-        # interventions true state    
-        self.int_true_var = np.array([[10**-8, 0.05**2, 10**-10],
-                                    [2**2, 0.1**2, 10**-8],
-                                    [4**2, 0.15**2, 10**-8]])
-        self.int_true = np.array([[0.5, 0.2, 1e-2],
-                                [7.5, 0.3, 1e-2],
-                                [18.75, 0.4, 1e-2]])
-        # true initial state    
+        # prior initial state    
         self.x_init = np.array([[np.random.randint(35,90), np.random.uniform(-1.5,-0.15), -0.005],
-                                [10**2, 0.05**2, 0.001**2]])
+                                [10**2, 0.05**2, 0.001**2]])                               # initial state for the structural elements in the network
+        self.init_var = np.array([3**2, 0.1**2, 0.005**2, 1, 1, 1]) # intiial variance for the state
         # true states
-        self.cs = np.empty((1,6))
-        self.c_cs = np.empty((self.num_b, np.max(self.num_c), 3))
-        self.b_cs = np.empty((self.num_b, 3))
-        self.net_cs = np.empty((1,3))
+        self.cs = np.empty((1,6))                                   # elements
+        self.c_cs = np.empty((self.num_b, np.max(self.num_c), 3))   # structural categories
+        self.b_cs = np.empty((self.num_b, 3))                       # bridges
+        self.net_cs = np.empty((1,3))                               # network
 
         # transformation function 
         self.n_tr = 4
         self.ST = SpaceTransformation(self.n_tr,self.max_cond,self.min_cond)
+        # State constraits
         self.SC = StateConstraints()
+        # State aggregation functions
         self.ME = MixtureEstimate()
 
         # estimated states
-        self.e_Ex = np.empty((1,6))
-        self.e_Var = np.empty((1,6,6))
-        self.c_Ex = np.empty((self.num_b,np.max(self.num_c),3))
-        self.c_Var = np.empty((self.num_b,np.max(self.num_c),3,3))
-        self.b_Ex = np.empty((self.num_b,3))
-        self.b_Var = np.empty((self.num_b,3,3))
-        self.net_Ex = np.empty((1,6))
-        self.net_Var = np.empty((1,6,6))
+        self.e_Ex = np.empty((1,6))         # elements
+        self.e_Var = np.empty((1,6,6))      # elements
+        self.c_Ex = np.empty((self.num_b,np.max(self.num_c),3))     # category
+        self.c_Var = np.empty((self.num_b,np.max(self.num_c),3,3))  # category
+        self.b_Ex = np.empty((self.num_b,3))        # bridge
+        self.b_Var = np.empty((self.num_b,3,3))     # bridge
+        self.net_Ex = np.empty((1,6))               # network
+        self.net_Var = np.empty((1,6,6))            # network
         
         # initilizing the network
         self.inspector = np.nan * np.zeros_like(self.num_e[self.cb, self.cc, 0])
@@ -159,9 +193,27 @@ class infra_planner:
 
         # SSM model estimated parameters
         self.sigma_v = np.random.uniform(0.85,1.1)*self.inspector_std
-        self.int_Ex = np.array([[[0.5,0.169,1e-2],
-                                [8.023,0.189,1e-2],
-                                [18.117,0.179,1e-2]]])
+
+        # interventions for Beams | Front Wall | Slabs | gaurdrail  | Wing Wall | Pavement
+        self.int_Ex = np.array([  [[0.5,0.169,1e-2],
+                                    [8.023,0.189,1e-2],
+                                    [18.117,0.179,1e-2]],
+                                        [[0.1,0.169,1e-2],
+                                        [18.407,0.199,1e-3],
+                                        [21.28,0.495,1e-4]],
+                                            [[1.894,0.532,3.1e-4],
+                                            [11.358,0.4,1e-4],
+                                            [20.632,0.802,0.004]],
+                                                [[0.2,0.169,1e-2],
+                                                [9.354,0.499,1e-4],
+                                                [13.683,0.054,1e-4]], 
+                                                    [[0.3,0.169,1e-2],
+                                                    [8.023,0.189,1e-2],
+                                                    [18.663,0.263,1e-4]],         
+                                                        [[8.023,0.189,1e-2],
+                                                        [20.933,0.187,2e-2],
+                                                        [27.071,0.505,2e-2]]
+                                                                            ])
 
         self.int_var = np.array([[[8.28e-05,2.65e-07,-5.29e-08],
                                     [2.65e-07,0.00030,1.75e-05],
@@ -172,6 +224,29 @@ class infra_planner:
                                                                                         [[0.18,0.00027,-0.0017],
                                                                                         [0.00027,0.00029,1.45e-05],
                                                                                         [-0.0018,1.45e-05,0.00052]]])
+        # interventions true state    
+        self.int_true_var = np.array([[10**-8, 0.05**2, 10**-10],
+                                    [2**2, 0.1**2, 10**-8],
+                                    [4**2, 0.15**2, 10**-8]])
+        self.int_true = np.array([ [[0.5, 0.2, 1e-2],
+                                        [7.5, 0.3, 1e-2],
+                                        [18.75, 0.4, 1e-2]],
+                                                [[0.1,0.2,1e-2],
+                                                [19,0.2,1e-3],
+                                                [20.5,0.4,1e-4]],
+                                                    [[1,0.5,3.1e-4],
+                                                    [12,0.4,1e-4],
+                                                    [20,0.8,0.004]],
+                                                        [[0.25,0.169,1e-2],
+                                                        [9.0,0.5,1e-4],
+                                                        [14.0,0.1,1e-4]],
+                                                            [[0.25,0.18,1e-2],
+                                                            [8,0.17,1e-2],
+                                                            [17,0.27,1e-4]],
+                                                                [[8,0.19,1e-2],
+                                                                [20,0.18,2e-2],
+                                                                [28,0.50,2e-2]]       
+                                                                                ])
         self.int_Q = np.square(np.array([[  [1.39,0,0,0,0,0],
                                             [0,0.01,0,0,0,0],
                                             [0,0,0.045,0,0,0],
@@ -190,7 +265,7 @@ class infra_planner:
                                                                             [0,0,0,3.768,0,0],
                                                                             [0,0,0,0,0.0227,0],
                                                                             [0,0,0,0,0,0.0499]]]))
-        self.init_var = np.array([3**2, 0.1**2, 0.005**2, 1, 1, 1])
+        
         data_dir ='./data'
         filename = pjoin(data_dir, 'service_life.mat')
         self.CDF = sio.loadmat(filename)
@@ -212,7 +287,7 @@ class infra_planner:
         self.find_interval = 1
 
         # actions tracking
-        self.act_timer = 0      # tracking the frequency of the expert's actions
+        self.act_timer = 0     # tracking the frequency of the policy's actions
         self.actions_count = np.zeros([self.num_b, np.max(self.num_c), self.num_e.max(), self.actionCardinality])
         self.actions_hist = self.total_years * np.ones([self.num_b, np.max(self.num_c), self.num_e.max(), self.actionCardinality])
 
@@ -224,29 +299,37 @@ class infra_planner:
         self.shutdown_cond = 35
         self.shutdown_speed = -2
         self.functional_cond = 70
-        self.element_critical_cond = 30
-        self.element_critical_speed = -2.5
-        self.s_goal = 70
-        self.action_costs = np.array([[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
-                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
-                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]
-                                        ,[0, -0.025, -0.075, -0.15, -0.40],[0, -0.025, -0.075, -0.15, -0.40]])
+        self.element_critical_cond = 55
+        self.element_critical_speed = -1.5
+
+        self.action_costs = np.array([
+                                    [0, -0.025, -0.075, -0.15, -0.40],[0, -0.075, -0.2, -0.3, -0.45],[0, -0.2, -0.3, -0.45, -0.50],
+                                    [0, -0.01, -0.05, -0.075, -0.1],[0, -0.07, -0.15, -0.3, -0.50],[0, -0.15, -0.35, -0.45, -1]
+                                    ])
+        self.action_costs_fixed = np.array([ 
+                                        [0, -0.1, -0.8, -0.8, -2],[0, -0.2, -0.5, -0.8, -2],[0, -0.3, -0.6, -0.8, -2],
+                                        [0, -0.05, -0.15, -0.2, -0.4],[0, -0.2, -0.5, -0.9, -2.5],[0, -0.5, -0.5, -0.7, -1.5]
+                                        ])
+        self.action_costs_const = np.array([350, 200, 100, 100, 100, 100])
+
+        # maitenance fund priority 
         self.fund_priority = np.random.rand(self.total_years+1)
-        self.shutdown_cost = 1
-        self.prev_shutdown = 0
-        self.prev_action = 0
-        self.shutdown_cost_perYear = -0.60
-        self.rewards = 0
-        self.elem_rewards = 0
-        self.cat_rewards = 0
-        self.bridge_rewards = 0
-        self.penalty = 0
-        self.penalty_cat = 0
-        self.penalty_bridge = 0
+
+        
+        self.shutdown_cost = 1              # track the maintenance shutdown of the bridge
+        self.prev_shutdown = 0              # track if the bridge has been previously shutdown
+        self.prev_action = 0                # track the type of actions
+        self.rewards = 0                    # rewards
+        self.elem_rewards = 0               # rewards: elemetns
+        self.cat_rewards = 0                # rewards: structural category
+        self.bridge_rewards = 0             # rewards: bridge
+        self.penalty = 0                    # penalty for no maitenance 
+        self.penalty_cat = 0                # penalty for no maitenance: structural category 
+        self.penalty_bridge = 0             # penalty for no maitenance: bridge 
         self.max_cost = 0
-        # reduction factors
-        self.alpha1 = 1
-        self.alpha2 = 1
+        # decaying  factors
+        self.alpha1 = 1 # condition
+        self.alpha2 = 1 # speed
 
         # Performance Measures
         self.compatiblity = 0
@@ -255,6 +338,9 @@ class infra_planner:
         self.compatibility_bridge = 0
         self.compatibility_net = 0
         self.variablity = 0
+        self.e_variablity = 0
+        self.c_variablity = 0
+        self.b_variablity = 0
 
         # plotting
         self.color_ex = 'bo'
@@ -271,29 +357,30 @@ class infra_planner:
 
         # initiation
         # Agnets
-        DM = decision_maker(self.int_Ex, self.include_budget, self.shutdown_cond, self.discrete_actions)
+        DM = decision_maker(self.int_Ex, self.include_budget, self.shutdown_cond, self.discrete_actions, self.b_min_functional_state)
         self.agent_element_discrete = DM.agent_element_lvl_discrete
-        self.agent_high_discrete = DM.agent_high_lvl_discrete #agent_high_lvl_discrete_NN
+        self.agent_high_discrete = DM.agent_high_lvl_discrete
         self.agent_one_element = DM.agent_one_element_lvl
-        self.agent_element = DM.agent_multi_element_lvl
+        self.agent_element = DM.agent_element_lvl
         self.agent_category = DM.agent_high_lvl
-        self.agent_bridge = DM.agent_high_lvl
-        self.agent_network = DM.agent_high_lvl
-
+        self.agent_bridge = DM.agent_high_lvl_bridge
+        self.agent_network = DM.agent_high_lvl_bridge
+        self.plot_policymap = DM.plot_policy
         self.get_initial_state()
         self.initial_run()
         # analyses level: network, bridge, category, element
         action = 0
         if self.network_lvl:
-            if self.discrete_actions:
-                _, _, _, observation = self.network_action_discrete(action)
-            else:
-                _, _, _, observation = self.network_action(action)
+            while self.current_year == 0:
+                if self.discrete_actions:
+                    _, _, _, observation = self.network_action_discrete_par(action)
+                else:
+                    _, _, _, observation = self.network_action_par(action)
         elif self.bridge_lvl:
-            if self.discrete_actions:
-                _, _, _, observation = self.bridge_action_discrete(action)
-            else:
-                _, _, _, observation = self.bridge_action(action)
+                if self.discrete_actions:
+                    _, _, _, observation = self.bridge_action_discrete(action)
+                else:
+                    _, _, _, observation = self.bridge_action(action)
         elif self.category_lvl:
             if self.discrete_actions:
                 _, _, _, observation = self.cat_action_discrete(action)
@@ -394,6 +481,7 @@ class infra_planner:
         elem_action
         elem_action_discrete
     """
+
     def network_action(self, goal):
         reward = 0
         # prepare bridge state
@@ -405,17 +493,15 @@ class infra_planner:
             state_sum = np.sum(self.b_cs[:, 0 ])
         else:
             state_sum = np.sum(self.b_Ex[:, 0 ])
+        # sort structures once
+        if self.deterministic_model:
+            min_bridge_cond = np.argsort(self.b_cs[:, 0])
+        else:
+            min_bridge_cond = np.argsort(self.b_Ex[:, 0])
 
         for i in range(self.num_b):
             # state on goal
             goal_dim = 0
-
-            # sort elements once
-            if i == 0:
-                if self.deterministic_model:
-                    min_bridge_cond = np.argsort(self.b_cs[:, 0])
-                else:
-                    min_bridge_cond = np.argsort(self.b_Ex[:, 0])
 
             # element in category
             self.cb = min_bridge_cond[i]
@@ -427,7 +513,7 @@ class infra_planner:
             # 
             self.network_state_update()
             # collect rewards
-            self.get_rewards_bridge(state, goal)
+            self.get_rewards_bridge(state)
             reward += self.bridge_rewards
             # prepare states to check on if the goal is acheived
             state_one_bridge_update = self.state_prep_3()
@@ -445,8 +531,8 @@ class infra_planner:
         next_state = self.state_net_prep(goal, 0)
 
         # update plotting functions
-        if self.plotting == 1:
-            self.plot_log()
+        if self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
+            self.render(goal)
 
         return state, goal, reward, next_state
 
@@ -460,6 +546,71 @@ class infra_planner:
             state, goal, reward, next_state = self.network_action(goal)
         return state, goal, reward, next_state
 
+    def network_action_par(self, goal):
+        # fund priority 
+        fund_pr = self.fund_priority[self.current_year]
+        if self.struc_tracker == 0:
+            if self.deterministic_model:
+                self.min_high_cond = np.argsort(self.b_cs[:, 0])
+            else:
+                self.min_high_cond = np.argsort(self.b_Ex[:, 0])
+
+        self.cb = self.min_high_cond[self.struc_tracker]
+
+        # reset the element tracker for each category 
+        self.cc = 0
+        self.ec = self.num_e[self.cb,self.cc,0]
+
+        # prepare bridge - category state
+        state = self.state_net_prep(goal, 1)
+
+        self.bridge_action(goal)
+        # 
+        self.bridge_state_update()
+        # collect rewards
+        reward = self.bridge_rewards
+        # update budget
+        if self.include_budget:
+            self.update_budget(fund_pr, reward)
+        # transition tracker
+        self.struc_tracker += 1
+        # move to the next structure
+        if self.struc_tracker < self.num_b:
+            self.cb = self.min_high_cond[self.struc_tracker]
+        else:
+            if self.deterministic_model:
+                self.min_high_cond = np.argsort(self.b_cs[:, 0])
+            else:
+                self.min_high_cond = np.argsort(self.b_Ex[:, 0])
+            self.cb = self.min_high_cond[0]
+        # next state
+        next_state = self.state_net_prep(None, 0)
+
+        # after step
+        # budget transition
+        if self.network_lvl and self.struc_tracker == self.num_b:
+            self.current_year += 1
+            fund_pr = self.fund_priority[self.current_year]
+            self.max_cond = self.max_cond_decay * self.max_cond
+            self.act_timer_on = 1
+            self.struc_tracker = 0
+
+        # update plotting functions
+        if self.network_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
+            self.render(goal)
+        if self.network_lvl:
+            return state, goal, reward, next_state
+
+    def network_action_discrete_par(self, action):
+        if action == 0:
+            state, goal, reward, next_state = self.network_action_par(0)
+        else:
+            # prepare category state
+            state_ = self.state_bridge_prep_single(0, 0)
+            goal = self.agent_bridge(state_)
+            state, goal, reward, next_state = self.network_action_par(goal)
+        return state, goal, reward, next_state
+
     def bridge_action(self, goal):
         reward = 0
         # prepare bridge state
@@ -469,21 +620,19 @@ class infra_planner:
         
         if self.deterministic_model:
             state_sum = np.sum(self.c_cs[self.cb, :, 0 ])
+            min_cat_cond = np.argsort(self.c_cs[self.cb, :, 0])
         else:
             state_sum = np.sum(self.c_Ex[self.cb, :, 0 ])
-
+            min_cat_cond = np.argsort(self.c_Ex[self.cb, :, 0])
+        
+        # this tracker is set to avoid any mismatch between the high-level action and the low-level action
+        # self.worst_cat_ind = 1
+        # vec_act = self.act_to_vec(goal)
         for i in range(self.num_c[self.cb]):
 
             # state on goal
             goal_dim = 0
-
-            # sort elements once
-            if i == 0:
-                if self.deterministic_model:
-                    min_cat_cond = np.argsort(self.c_cs[self.cb, :, 0])
-                else:
-                    min_cat_cond = np.argsort(self.c_Ex[self.cb, :, 0])
-
+                    
             # element in category
             self.cc = min_cat_cond[i]
 
@@ -497,12 +646,14 @@ class infra_planner:
             # 
             self.bridge_state_update()
             # collect rewards
-            self.get_rewards_cat(state, goal)
+            # self.get_rewards_cat(state)
             reward += self.cat_rewards
             # prepare states to check on if the goal is acheived
             state_one_cat_update = self.state_prep_2()
             # transition the goal
-            new_goal = self.goal_transition_high(state, goal, state_one_cat_update, goal_dim)
+            new_goal = self.goal_transition_high_bridge(state, goal, state_one_cat_update, goal_dim)
+            # this tracker is set to avoid any mismatch between the high-level action and the low-level action
+            # self.worst_cat_ind = 0
         # after step
         # budget transition
         if self.bridge_lvl:
@@ -510,16 +661,19 @@ class infra_planner:
             self.update_budget(fund_pr, reward)
             self.current_year += 1
             self.max_cond = self.max_cond_decay * self.max_cond
-            self.act_timer_on = 1
-            self.shutdown_cost = 1
+        self.act_timer_on = 1
+        self.shutdown_cost = 1
         
         next_state = self.state_bridge_prep(goal, 0)
 
         # update plotting functions
-        if self.plotting == 1:
-            self.plot_log()
+        if self.bridge_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
+            self.render(goal)
+
         if self.bridge_lvl:
             return state, goal, reward, next_state
+        else:
+            self.bridge_rewards = reward
 
     def bridge_action_discrete(self, action):
         if action == 0:
@@ -536,23 +690,41 @@ class infra_planner:
         # prepare category state
         state = self.state_category_prep(goal, 1)
         goal_dim = 0
-        target_cond = state[goal_dim] + goal * 75
+        # target_cond = state[goal_dim] + goal * 75
+        new_goal = copy.copy(goal)
+        # sort elements once
+        if self.deterministic_model:
+            state_sum = np.sum(self.e_Ex[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
+            min_elem_cond = np.argsort(self.cs[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
+        else:
+            state_sum = np.sum(self.e_Ex[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
+            min_elem_cond = np.argsort(self.e_Ex[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
+
         for i in range(self.num_e[self.cb, self.cc, 0]):
-            # sort elements once
-            if i == 0:
-                if self.deterministic_model:
-                    min_elem_cond = np.argsort(self.cs[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
-                else:
-                    min_elem_cond = np.argsort(self.e_Ex[self.cb, self.cc, 0:self.num_e[self.cb,self.cc, 0], 0])
+            
             # element in category
             self.ci = min_elem_cond[i]
 
             # element prep
-            state_element = self.state_element_prep_high(target_cond, goal)
+            state_element = self.state_prep_0()
 
             # get action from goal
-            goal_elem = self.agent_element(state_element)
-            action = self.goal_to_action_index(goal_elem)
+            #goal_elem = self.goal_category_to_element(new_goal, state_sum)
+
+            if new_goal == 0:
+                action = 0
+            else:
+                action = self.agent_element(state_element, self.cc)
+                if action == 0:
+                    action = 1
+            #action = self.goal_to_action_index(goal_elem)
+
+            #if goal == 0:
+            #    action = 0
+            #else:
+            #    action = self.agent_one_element(state_element, self.cc)
+            #    if action == 0:
+            #        action = 1
 
             # apply action
             self.elem_action(action)
@@ -560,13 +732,15 @@ class infra_planner:
             # get updated state of the category
             self.category_state_update()
             # collect rewards
-            self.get_rewards_cat(state, goal_elem)
+            self.get_rewards_cat(state)
             reward += self.cat_rewards
             # get the category condition after one element intervention
-            cat_state_update = self.state_prep_1()
+            # cat_state_update = self.state_prep_1()
+            state_one_elem_update = self.state_prep_1()
             # transition the goal
-            goal = self.goal_transition(goal_elem, state_element)
-            state[0:2] = cat_state_update
+            # goal = self.goal_transition(goal_elem, state_element)
+            new_goal = self.goal_transition_elem(state, goal, state_one_elem_update, goal_dim)
+            state[0:state_one_elem_update.__len__()] = state_one_elem_update
 
         # after step
         # budget transition
@@ -581,10 +755,13 @@ class infra_planner:
         next_state = self.state_category_prep(goal, 0)
 
         # update plotting functions
-        if self.plotting == 1:
-            self.plot_log()
+        if self.category_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
+            self.render(goal)
+
         if self.category_lvl:
             return state, goal, reward, next_state
+        else:
+            self.cat_rewards = copy.copy(reward)
         
     def cat_action_discrete(self, action):
         if action == 0:
@@ -592,7 +769,7 @@ class infra_planner:
         else:
             # prepare category state
             state_ = self.state_category_prep(0, 0)
-            goal = self.agent_category(state_)
+            goal = self.agent_category(state_, self.cc)
             state, goal, reward, next_state = self.cat_action(goal)
         return state, goal, reward, next_state
 
@@ -624,6 +801,11 @@ class infra_planner:
         self.get_rewards_elem(action)
 
         reward = self.elem_rewards
+
+        # update plotting functions
+        if self.element_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
+            self.render(action)
+
         if self.element_lvl:
             next_state = self.state_element_prep() 
             return state, action, reward, next_state
@@ -633,7 +815,7 @@ class infra_planner:
             state, action, reward, next_state = self.elem_action(action)
         else:
             state_ = self.state_element_prep()
-            goal = self.agent_one_element(state_)
+            goal = self.agent_one_element(state_, self.cc)
             action = self.goal_to_action_index(goal)
             state, action, reward, next_state = self.elem_action(action)
         return state, action, reward, next_state
@@ -651,18 +833,42 @@ class infra_planner:
         act_check = self.check_action_limits()
         # shutdown cost
         if self.shutdown_cost:
-            sc_act =  -1 + 1.5 * self.action_costs[self.cc][action]
+            if action == 4:
+                sc_act =  self.action_costs_fixed[self.cc][action] + self.action_costs[self.cc][action]
+            elif action == 3:
+                sc_act =  self.action_costs_fixed[self.cc][action] + self.action_costs[self.cc][action]
+            elif action == 2:
+                sc_act =  self.action_costs_fixed[self.cc][action] + self.action_costs[self.cc][action]
+            elif action == 1:
+                sc_act =  self.action_costs_fixed[self.cc][action] + self.action_costs[self.cc][action]
             self.shutdown_cost = 0
             self.prev_action = action
         else:
             if self.prev_action >= action:
                 sc_act = 0
             else:
-                sc_act = -1 + 1.5 * (self.action_costs[self.cc][action] - self.action_costs[self.cc][self.prev_action])
+                sc_act = -1 + (self.action_costs[self.cc][action] - self.action_costs[self.cc][self.prev_action])
                 self.prev_action = action
 
         if action>0 :
-            elem_cost = self.action_costs[self.cc][action] + sc_act
+            if self.deterministic_model:
+                if action == 4:
+                    elem_cost =  sc_act #+ self.action_costs[self.cc][action] 
+                elif action == 3:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.cs[self.cb, self.cc, self.ci,0] + sc_act # 350: beams, 200: Front Wall
+                elif action ==2:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.cs[self.cb, self.cc, self.ci,0] + sc_act
+                elif action ==1:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.cs[self.cb, self.cc, self.ci,0] + sc_act
+            else:
+                if action == 4:
+                    elem_cost =  sc_act #+ self.action_costs[self.cc][action] 
+                elif action == 3:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.e_Ex[self.cb, self.cc, self.ci,0] + sc_act # 350: beams, 200: Front Wall
+                elif action ==2:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.e_Ex[self.cb, self.cc, self.ci,0] + sc_act
+                elif action ==1:
+                    elem_cost = self.action_costs[self.cc][action]*self.action_costs_const[self.cc]/self.e_Ex[self.cb, self.cc, self.ci,0] + sc_act
         else:
             elem_cost = 0
 
@@ -680,38 +886,36 @@ class infra_planner:
                     self.penalty = 1
 
         if self.penalty:
-            elem_cost = elem_cost + self.action_costs[self.cc][3]
+            elem_cost = -1 + elem_cost + self.action_costs[self.cc][3]
             self.penalty = 0
 
         self.elem_rewards = elem_cost
 
-    def get_rewards_cat(self, state, goal):
+    def get_rewards_cat(self, state):
         if self.penalty_cat != 1:
             if (state[0]<=self.shutdown_cond or state[1]<=self.shutdown_speed):
                 self.penalty_cat = 1
         # check penalty
         if self.penalty_cat:
-            cat_cost = self.action_costs[self.cc][3]
+            cat_cost = -1 + self.action_costs[self.cc][4]
             self.penalty_cat = 0
         else:
             cat_cost = 0
 
-        if goal < 0: goal = 0
-        self.cat_rewards = - goal + self.elem_rewards + cat_cost      
+        self.cat_rewards = self.elem_rewards + cat_cost      
     
-    def get_rewards_bridge(self, state, goal):
+    def get_rewards_bridge(self, state):
         if self.penalty_bridge ==0:
             if (state[0]<=self.shutdown_cond or state[1]<-self.shutdown_speed):
                 self.penalty_bridge = 1
         # check penalty
         if self.penalty_bridge:
-            bridge_cost = self.action_costs[self.cc][3]
+            bridge_cost = -1 + self.action_costs[self.cc][3]
             self.penalty_bridge = 0
         else:
             bridge_cost = 0
 
-        if goal < 0: goal = 0
-        self.bridge_rewards = - goal + self.cat_rewards + bridge_cost     
+        self.bridge_rewards = self.cat_rewards + bridge_cost     
     
     def get_rewards_sparse(self, reward_agent, reward_expert):
         if reward_agent > reward_expert:
@@ -741,10 +945,10 @@ class infra_planner:
                 self.actions_count[self.cb, self.cc, self.ci, 1] > self.num_e[self.cb, self.cc, 0] * 16:
                 act_penalty = 1
         elif self.element_lvl:
-            if self.actions_count[self.cb, self.cc, self.ci, 4] > 2 or \
-                self.actions_count[self.cb, self.cc, self.ci, 3] > 4 or \
-                self.actions_count[self.cb, self.cc, self.ci, 2] > 8 or \
-                self.actions_count[self.cb, self.cc, self.ci, 1] > 16:
+            if self.actions_count[self.cb, self.cc, self.ci, 4] > 2 * self.total_years/100  or \
+                self.actions_count[self.cb, self.cc, self.ci, 3] > 4 * self.total_years/100 or \
+                self.actions_count[self.cb, self.cc, self.ci, 2] > 8 * self.total_years/100  or \
+                self.actions_count[self.cb, self.cc, self.ci, 1] > 16 * self.total_years/100:
                 act_penalty = 1
         return act_penalty
     """ - State Propagation in Time ########################################################################################################
@@ -820,6 +1024,7 @@ class infra_planner:
             
         else: # replace
             # space transformation to know max value in the transformed space
+            self.max_cond = copy.copy(self.max_cond_original)
             max_cond,_ = self.ST.original_to_transformed(self.max_cond)
             next_state = np.array([max_cond, -0.1, -0.001])
         if next_state.shape[0] == next_state.size:
@@ -832,7 +1037,7 @@ class infra_planner:
         if action == 0:
             int_noise = np.array(np.zeros(3))
         else:
-            true_mu = copy.copy(self.int_true[action-1,:])
+            true_mu = copy.copy(self.int_true[self.cc][action-1,:])
             true_Sigma = copy.copy(np.diag(self.int_true_var[action-1,:]))
             # check for action frequency
             if self.actions_hist[self.cb, self.cc, self.ci, action] != self.total_years :
@@ -849,7 +1054,7 @@ class infra_planner:
             int_noise = np.repeat(int_noise[np.newaxis,:],state.shape[0],axis=0)
         else:
             process_noise = np.random.multivariate_normal(np.zeros(3), self.Q)
-        next_state = np.transpose(self.A@state.squeeze().transpose()) +process_noise + int_noise
+        next_state = np.transpose(self.A@state.squeeze().transpose()) + process_noise + int_noise
         return next_state
 
     def estimate_step(self, mu, var, action):
@@ -859,7 +1064,7 @@ class infra_planner:
             Q_int = np.zeros([6,6])
             self.Am[0:3,3:6] = np.zeros([3,3])
         else:
-            int_mu = copy.copy(self.int_Ex[0][action-1])
+            int_mu = copy.copy(self.int_Ex[self.cc][action-1])
             int_Sigma = copy.copy(np.diag(self.int_var[0][action-1]))
             Q_int = self.int_Q[action-1]
             self.Am[0:3,3:6] = np.eye(3)
@@ -890,20 +1095,9 @@ class infra_planner:
         if action != 4:
             mu_pred = (self.Am @ mu.transpose()).transpose()
             var_pred = self.Am @ var @ self.Am.transpose() + all_noise
-            #if action != 0:
-            #    if np.any(mu_pred[:,1] + 2 * np.sqrt(var_pred[:,1, 1]) > 0):
-            #        mu[:,4:6] = [[0, 0]]
-            #       var[:,4:6, 4:6] = [[[1e-8, 0],[0, 1e-8]]]
-            #        Q_int[1:3,1:3] = [[1e-8, 0],[0, 1e-8]]
-            #        Q_int[4:6,4:6] = [[1e-8, 0],[0, 1e-8]]
-            #        all_noise = sp.block_diag(self.Q,np.zeros([3,3])) + Q_int
-            #        mu_pred = (self.Am @ mu.transpose()).transpose()
-            #        var_pred = self.Am @ var @ self.Am.transpose() + all_noise
-            #else:
-            #    if mu_pred[0,1] == -np.inf:
-            #       mu_pred[0,1] =  mu[0,1]
         else:
             # space transformation to know max value in the transformed space
+            self.max_cond = copy.copy(self.max_cond_original)
             max_cond,_ = self.ST.original_to_transformed(self.max_cond)
             mu_pred = np.array([max_cond, -0.1, -0.001, 0, 0, 0])
             var_pred = np.diag([1, 0.025**2, 0.0025**2, 0, 0, 0])
@@ -1006,33 +1200,32 @@ class infra_planner:
     """ 
     def category_state_update(self):
         weigts = np.ones(self.num_e[self.cb, self.cc, 0])/self.num_e[self.cb, self.cc, 0]
-        if self.deterministic_model == 0:
-            Ex_c, Var_c = self.ME.gaussian_mixture(weigts, self.e_Ex[self.cb,self.cc,:,:], self.e_Var[self.cb,self.cc,:,:,:])
-            self.c_Ex[self.cb, self.cc,:] = Ex_c[0:3]
-            self.c_Var[self.cb, self.cc, :, :] = Var_c[0:3,0:3]
-        else:
-            Ex_c = np.mean(self.cs[self.cb, self.cc, :], axis= 0)
-            self.c_cs[self.cb, self.cc,:] = Ex_c
+        e_num = weigts.size
+        #if self.deterministic_model == 0:
+        Ex_c, Var_c = self.ME.gaussian_mixture(weigts, self.e_Ex[self.cb,self.cc,:,:], self.e_Var[self.cb,self.cc,:,:,:])
+        self.c_Ex[self.cb, self.cc,:] = Ex_c[0:3]
+        self.c_Var[self.cb, self.cc, :, :] = Var_c[0:3,0:3]
+        #else:
+        self.c_cs[self.cb, self.cc,:] = np.mean(self.cs[self.cb, self.cc, 0:e_num], axis= 0)
     
     def bridge_state_update(self):
         weigts = np.ones(self.num_c[self.cb])/self.num_c[self.cb]
-        if self.deterministic_model == 0:
-            Ex_b, Var_b = self.ME.gaussian_mixture(weigts, self.c_Ex[self.cb, :,:], self.c_Var[self.cb, :,:,:])
-            self.b_Ex[self.cb,:] = Ex_b
-            self.b_Var[self.cb,:,:] = Var_b
-        else:
-            Ex_b = np.mean(self.c_cs[self.cb, :], axis= 0)
-            self.b_cs[self.cb,:] = Ex_b
+        c_num = weigts.size
+        #if self.deterministic_model == 0:
+        Ex_b, Var_b = self.ME.gaussian_mixture(weigts, self.c_Ex[self.cb, :,:], self.c_Var[self.cb, :,:,:])
+        self.b_Ex[self.cb,:] = Ex_b
+        self.b_Var[self.cb,:,:] = Var_b
+        #else:
+        self.b_cs[self.cb,:] = np.mean(self.c_cs[self.cb, 0:c_num], axis= 0)
     
     def network_state_update(self):
         weigts = np.ones(self.num_b)/self.num_b
-        if self.deterministic_model == 0:
-            Ex_net, Var_net = self.ME.gaussian_mixture(weigts, self.b_Ex[:], self.b_Var[:])
-            self.net_Ex = Ex_net
-            self.net_Var = Var_net
-        else:
-            Ex_net = np.mean(self.b_cs[:], axis= 0)
-            self.net_cs = Ex_net
+        #if self.deterministic_model == 0:
+        Ex_net, Var_net = self.ME.gaussian_mixture(weigts, self.b_Ex[:], self.b_Var[:])
+        self.net_Ex = Ex_net
+        self.net_Var = Var_net
+        #else:
+        self.net_cs = np.mean(self.b_cs[:], axis= 0)
 
     """ Miscellaneous
 
@@ -1050,11 +1243,45 @@ class infra_planner:
 
     def transform_to_original(self,state):
         or_state = np.zeros(state.shape[0])
-        or_state[0] = self.ST.transformed_to_original(state[0]).copy()
+        or_state[0] = copy.copy(self.ST.transformed_to_original(state[0]))
         or_state[1],_,_,_,_= copy.copy(self.ST.transformed_to_original_speed(state[0],state[1],np.ones(1)))
         return or_state
     
     def assemble_state(self, state):
+        if self.element_lvl:
+            # number of years without an action
+            self.element_lvl = 1
+            # state = np.append(state, self.act_timer)
+            # how many times each action is taken
+            #state = np.append(state, self.actions_count[self.cb, self.cc, self.ci, 1])
+            #state = np.append(state, self.actions_count[self.cb, self.cc, self.ci, 2])
+            #state = np.append(state, self.actions_count[self.cb, self.cc, self.ci, 3])
+            #state = np.append(state, self.actions_count[self.cb, self.cc, self.ci, 4])
+            # when was the last time an action is taken
+            #state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 1])
+            #state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 2])
+            #state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 3])
+            #state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 4])
+        elif self.category_lvl:
+            # number of years without an action
+            act_time = np.ceil(self.act_timer/self.num_e[self.cb, self.cc, 0])
+            state = np.append(state, act_time)
+            state = np.append(state, self.e_variablity)
+        elif self.bridge_lvl:
+            #act_time = np.ceil(self.act_timer/self.num_c[self.cb])
+            #state = np.append(state, act_time)
+            state = np.append(state, self.c_variablity)
+        else:
+            act_time = np.ceil(self.act_timer/self.num_b)
+            state = np.append(state, act_time)
+            state = np.append(state, self.b_variablity)
+        if self.include_budget:
+            state = np.append(state, self.bridge_priority)
+            state = np.append(state, self.x_budget[0])
+
+        return state
+
+    def assemble_state_par(self, state_high, state_low):
         if self.element_lvl:
             # number of years without an action
             state = np.append(state, self.act_timer)
@@ -1071,16 +1298,19 @@ class infra_planner:
         elif self.category_lvl:
             # number of years without an action
             act_time = np.ceil(self.act_timer/self.num_e[self.cb, self.cc, 0])
-            state = np.append(state, act_time)
-            state = np.append(state, self.variablity)
+            state = np.append(state_high, act_time)
+            state = np.append(state, self.e_variablity)
         elif self.bridge_lvl:
-            act_time = np.ceil(self.act_timer/self.num_c[self.cb])
+            act_time = np.ceil(self.act_timer[self.cb, self.cc]/self.num_c[self.cb])
+            state = state_low # np.append(state_high, state_low)
             state = np.append(state, act_time)
-            state = np.append(state, self.variablity)
+            state = np.append(state, self.c_variablity)
+            #state = np.append(state, self.struc_tracker)
         else:
             act_time = np.ceil(self.act_timer/self.num_b)
+            state = state_low # np.append(state_high, state_low)
             state = np.append(state, act_time)
-            state = np.append(state, self.variablity)
+            state = np.append(state, self.b_variablity)
         if self.include_budget:
                 state = np.append(state, self.bridge_priority)
                 state = np.append(state, self.x_budget[0])
@@ -1135,15 +1365,27 @@ class infra_planner:
         # state before action
         state = self.assemble_state(state_original)
         return state
+
+    def state_bridge_prep_single(self, goal, compatibility_check): # only for vector actions
+        if compatibility_check == 1:
+            # check goal compatibility
+            self.compatibility_goal_bridge(goal)
+        # state before action
+        state_low = self.state_prep_1()
+        state_high = self.state_prep_2()
+        # state before action
+        state = self.assemble_state_par(state_high, state_low)
+        return state
     
     def state_net_prep(self, goal, compatibility_check):
         if compatibility_check == 1:
             # check goal compatibility
             self.compatibility_goal_network(goal)
         # state before action
-        state_original = self.state_prep_3()
+        state_low = self.state_prep_3_net()
+        state_high = self.state_prep_3()
         # state before action
-        state = self.assemble_state(state_original)
+        state = self.assemble_state_par(state_high, state_low)
         return state
 
     def state_prep_0(self):
@@ -1157,24 +1399,24 @@ class infra_planner:
         state = self.transform_to_original(state_tr)
         return state
 
-    def state_prep_1(self):
+    def state_prep_1(self): # only for vector action 
         if self.deterministic_model:
             state_tr = copy.deepcopy(self.c_cs[self.cb, self.cc,0:2])
-            self.variablity = np.std(self.cs[self.cb, self.cc, : ,0])
+            self.e_variablity = np.std(self.cs[self.cb, self.cc, :, 0])
         else:
             state_tr = copy.deepcopy(self.c_Ex[self.cb, self.cc, 0:2])
-            self.variablity = np.std(self.e_Ex[self.cb, self.cc, : ,0])
-        # back-transform the space
+            self.e_variablity = np.std(self.e_Ex[self.cb, self.cc, :, 0])
+            # back-transform the space
         state = self.transform_to_original(state_tr)
         return state
 
     def state_prep_2(self):
         if self.deterministic_model:
             state_tr = copy.deepcopy(self.b_cs[self.cb, 0:2])
-            self.variablity = np.std(self.c_cs[self.cb, :, 0])
+            self.c_variablity = np.std(self.c_cs[self.cb, :, 0])
         else:
             state_tr = copy.deepcopy(self.b_Ex[self.cb, 0:2])
-            self.variablity = np.std(self.c_Ex[self.cb, :, 0])
+            self.c_variablity = np.sqrt(self.b_Var[self.cb, 0, 0])
         # back-transform the space
         state = self.transform_to_original(state_tr)
         return state
@@ -1182,30 +1424,72 @@ class infra_planner:
     def state_prep_3(self):
         if self.deterministic_model:
             state_tr = copy.deepcopy(self.net_cs[0:2])
-            self.variablity = np.std(self.b_cs[: ,0])
+            self.b_variablity = np.std(self.b_cs[:, 0])
         else:
             state_tr = copy.deepcopy(self.net_Ex[0:2])
-            self.variablity = np.std(self.b_Ex[: ,0])
+            self.b_variablity = np.std(self.b_Ex[:, 0])
         # back-transform the space
         state = self.transform_to_original(state_tr)
+        return state
+    
+    def state_prep_3_net(self):
+        state = []
+        for i in range(self.num_b):
+            if self.deterministic_model:
+                state_tr = copy.deepcopy(self.b_cs[i,0:2])
+            else:
+                state_tr = copy.deepcopy(self.b_Ex[i, 0:2])
+            # back-transform the space
+            state = np.append(state, self.transform_to_original(state_tr))
         return state
 
     """ Plotting
 
-        plot_log
+        render
         state_plot
         pdf_plot_
 
     """  
-    def plot_log(self):
-        self.plt_Ex.append(self.c_Ex[self.cc,0])
-        self.plt_var.append(self.c_Var[self.cc][0,0])
-        self.plt_Ex_dot.append(self.c_Ex[self.cc,1])
-        self.plt_var_dot.append(self.c_Var[self.cc][1,1])
-        self.plt_y.append(np.mean(self.y[self.cc, self.ci]))
-        self.plt_R.append(np.mean(self.inspector_std[self.inspector,1]**2)+np.var(self.y[self.cc, self.ci]))
-        self.plt_true_c.append(np.mean(self.cs[self.cc][self.ci,0]))
-        self.plt_true_s.append(np.mean(self.cs[self.cc][self.ci,1]))
+    def render(self, goal):
+        if self.element_lvl:
+            self.plt_Ex.append(self.e_Ex[self.cb,self.cc,self.ci,0])
+            self.plt_var.append(self.e_Var[self.cb,self.cc,self.ci,0,0])
+            self.plt_Ex_dot.append(self.e_Ex[self.cb, self.cc,self.ci,1])
+            self.plt_var_dot.append(self.e_Var[self.cb, self.cc,self.ci, 1,1])
+            self.plt_y.append(np.mean(self.y[self.cc, self.ci]))
+            if np.isnan(self.plt_y)[-1]:
+                self.plt_R.append(np.nan)
+            else:
+                self.plt_R.append(np.mean(self.inspector_std[self.inspector,1]**2)+np.var(self.y[self.cc, self.ci]))
+            self.plt_true_c.append(self.cs[self.cb, self.cc,self.ci, 0])
+            self.plt_true_s.append(self.cs[self.cb, self.cc,self.ci, 1])
+        elif self.category_lvl:
+            self.plt_Ex.append(self.c_Ex[self.cb,self.cc,0])
+            self.plt_var.append(self.c_Var[self.cb,self.cc,0,0])
+            self.plt_Ex_dot.append(self.c_Ex[self.cb, self.cc,1])
+            self.plt_var_dot.append(self.c_Var[self.cb, self.cc, 1,1])
+            self.plt_y.append(np.nan)
+            self.plt_R.append(np.nan)
+            self.plt_true_c.append(self.c_cs[self.cb, self.cc, 0])
+            self.plt_true_s.append(self.c_cs[self.cb, self.cc, 1])
+        elif self.bridge_lvl:
+            self.plt_Ex.append(self.b_Ex[self.cb,0])
+            self.plt_var.append(self.b_Var[self.cb,0,0])
+            self.plt_Ex_dot.append(self.b_Ex[self.cb,1])
+            self.plt_var_dot.append(self.b_Var[self.cb, 1,1])
+            self.plt_y.append(np.nan)
+            self.plt_R.append(np.nan)
+            self.plt_true_c.append(self.b_cs[self.cb, 0])
+            self.plt_true_s.append(self.b_cs[self.cb, 1])
+        elif self.network_lvl:
+            self.plt_Ex.append(self.net_Ex[0])
+            self.plt_var.append(self.net_Var[0,0])
+            self.plt_Ex_dot.append(self.net_Ex[1])
+            self.plt_var_dot.append(self.net_Var[1,1])
+            self.plt_y.append(np.nan)
+            self.plt_R.append(np.nan)
+            self.plt_true_c.append(self.net_cs[0])
+            self.plt_true_s.append(self.net_cs[1])
         self.plt_t.append(self.current_year)
             # max length of the plot fot the time series stored 
         self.plt_Ex = self.plt_Ex[-20:]
@@ -1217,6 +1501,30 @@ class infra_planner:
         self.plt_t = self.plt_t[-20:]
         self.plt_true_c = self.plt_true_c[-20:]
         self.plt_true_s = self.plt_true_s[-20:]
+        fig = plt.figure(1)
+        fig.clf()
+        (ax1, ax2) = fig.subplots(1,2)
+        ax1.clear()
+        ax2.clear()
+        self.animate(goal, ax1, ax2)
+        plt.tight_layout()
+        plt.show(block=False)
+        plt.draw()
+        plt.pause(0.01)
+        
+    
+    def animate(self, goal, ax1, ax2): #, t_val,Ex_val,Var_val,Ex_d_val,Var_d_val, y_Ex, R_Ex, goal, ax1, ax2):
+        self.state_plot(np.array(self.plt_Ex),np.array(self.plt_var),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'condition', ax1, ax2)
+        self.state_plot(np.array(self.plt_Ex_dot),np.array(self.plt_var_dot),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'speed', ax1, ax2, self.plt_Ex)
+        true_cond = self.ST.transformed_to_original(np.array(self.plt_true_c)).copy()
+        true_speed, _, _, _, _ = self.ST.transformed_to_original_speed(np.array(self.plt_true_c), np.array(self.plt_true_s), np.ones(self.plt_true_s.__len__()))
+        ax1.plot(np.array(self.plt_t), true_cond, 'k', label = 'True')
+        ax2.plot(np.array(self.plt_t), true_speed,'k')
+        ax1.legend(loc="lower left")
+        if self.element_lvl:
+            ax1.bar(self.plt_t[-1], (75*goal/4)+25)
+        else:
+            ax1.bar(self.plt_t[-1], (75*goal)+25)
         
     def state_plot(self, mu, var, y, R, years, plot_type, ax1, ax2, *args):
         if plot_type == 'condition':
@@ -1229,7 +1537,7 @@ class infra_planner:
             std_original_1n = self.ST.transformed_to_original(mu - std).copy()
             std_original_2p = self.ST.transformed_to_original(mu + 2 * std).copy()
             std_original_2n = self.ST.transformed_to_original(mu - 2 * std).copy()
-            ax1.plot(years, mu_cond_original)
+            ax1.plot(years, mu_cond_original, label = 'Estimate')
             ax1.plot(years, y_original, self.color_ex)
             if years.size>1:
                 ax1.errorbar(years, y_original, np.array([r_under, r_above]), linestyle='dotted')
@@ -1266,7 +1574,7 @@ class infra_planner:
         test_env
         
     """  
-    def test_env(self, episodes_num):
+    def test_env(self, episodes_num):#, val):
         state = self.reset()
         test_seed = np.random.randint(episodes_num, size = episodes_num)
         self.expert_model = 1
@@ -1279,26 +1587,46 @@ class infra_planner:
         var_vec_true = np.zeros([3,3,total_years])
         reward_vec = np.nan * np.zeros(total_years)
         goal_vec = np.nan * np.zeros(total_years)
+        act_vec = np.nan * np.zeros(total_years)
+        goal_interval = np.zeros(total_years)
+        interval_vec = np.zeros(total_years)
+        cond_vec = np.nan * np.zeros(total_years)
+        total_reward_vec = np.nan * np.zeros(episodes_num)
+        speed_vec = np.nan * np.zeros(total_years)
         obs = np.nan * np.zeros(total_years)
         R = np.nan * np.zeros(total_years)
         state_action = []
         state_noaction = []
+        cond_scatter = []
+        speed_scatter = []
         episode_reward = 0
         total_rewards = 0
         total_compt_ = 0
         total_crtic_ = 0
         compt_ = 0
         crtic_ = 0 
+        step_goal = 0
+        Avg_cond = 0
+        Std_cond = 0
+        Avg_speed = 0
+        Std_speed = 0
         ep = 0
         while ep < episodes_num:
             self.seed = test_seed[ep]
             for k in range(total_years):
-                prev_state = copy.copy(state[0])
-                goal = self.decision_maker(state)
+                prev_state = copy.copy(state)
+                goal = self.decision_maker(state)#, val)
                 state, reward, _, step_info = self.step(goal)
-                episode_reward += reward
+                episode_reward += reward * 0.99**(k)
+                step_goal += goal
                 reward_vec[k] = episode_reward
-                goal_vec[k] = goal
+                goal_vec[k] = copy.copy(step_goal > 1)
+                act_vec[k] = goal
+                if goal > 0:
+                    goal_interval[k] = k 
+                cond_vec[k] = state[0]
+                speed_vec[k] = state[1]
+                step_goal = 0
                 if self.element_lvl:
                     compt_ += step_info['e_compatibility']
                     crtic_ += step_info['e_criticality']
@@ -1358,14 +1686,24 @@ class infra_planner:
                                 obs[k] =  self.y[self.cc, self.ci]
                                 R[k] = self.inspector_std[self.inspector[0],1]**2
                 else:
-                    state_action.append(prev_state) if goal > 0 else state_noaction.append(prev_state)
+                    state_action.append(prev_state[0]) if goal > 0 else state_noaction.append(prev_state[0])
+                    cond_scatter.append(prev_state[0])
+                    speed_scatter.append(prev_state[1])
             total_rewards += episode_reward
+            total_reward_vec[ep] = episode_reward
             total_compt_ += compt_/total_years
+            interval_ind = np.diff(np.insert(goal_interval[goal_interval>0],0,0)).astype('int64')
+            interval_vec[interval_ind] += 1
+            Avg_cond += np.mean(cond_vec)
+            Std_cond += np.std(cond_vec)
+            Avg_speed += np.mean(speed_vec)
+            Std_speed += np.std(speed_vec)
+            goal_interval = np.zeros(total_years)
             ep += 1
             if episodes_num != 1:
                 if self.element_lvl:
                     total_crtic_ += crtic_/total_years
-                    print(f"Episode {ep:.0f} rewards: {episode_reward:.2f}; compatibility: {100*compt_/total_years:.0f}%; criticality: {100*crtic_/total_years:.0f}%")
+                    #print(f"Episode {ep:.0f} rewards: {episode_reward:.2f}; compatibility: {100*compt_/total_years:.0f}%; criticality: {100*crtic_/total_years:.0f}%")
                 else:
                     print(f"Episode {ep:.0f} rewards: {episode_reward:.2f}; compatibility: {100*compt_/total_years:.0f}%")
             state = self.reset()
@@ -1375,7 +1713,7 @@ class infra_planner:
             compt_ = 0
             crtic_ = 0
         if self.element_lvl:
-            print(f'> Total Rewards: {total_rewards:.1f}, Average Compatibility: {100*total_compt_/episodes_num:.1f}%, Average Criticality: {100*total_crtic_/episodes_num:.1f}%')
+            print(f'> Avg. Costs: {total_rewards/episodes_num:.1f}, Std. Cost: {np.std(total_reward_vec):.1f}, Average Compatibility: {100*total_compt_/episodes_num:.1f}%, Average Criticality: {100*total_crtic_/episodes_num:.1f}%, Condition: {Avg_cond/episodes_num:.1f}, {Std_cond/episodes_num:.1f}, Speed: {Avg_speed/episodes_num:.1f}, {Std_speed/episodes_num:.1f}')
         else:
             print(f'> Total Rewards: {total_rewards:.1f}, Average Compatibility: {100*total_compt_/episodes_num:.1f}%')
         fig = plt.figure(1)
@@ -1391,17 +1729,39 @@ class infra_planner:
                 self.state_plot(mu_vec_true[1,:],var_vec_true[1,1,:],obs,R,years,'speed',ax1, ax2,mu_vec_true[0,:])
             ax3.plot(years, reward_vec)
             ax3.set(xlabel='Time (Year)', ylabel='Cumulative Cost')
-            ax4.bar(years, goal_vec)
+            ax4.bar(years, act_vec)
             ax4.set(xlabel='Time (Year)', ylabel='Goals')
             fig.savefig('test_policy_single.png')
         else:
-            (ax1, ax2) = fig.subplots(2,1)
+            (ax1, ax2, ax3) = fig.subplots(3,1)
             ax1.hist(state_action, density=True)
             ax1.set(xlabel='Condition with action', ylabel='Probablity')
             ax2.hist(state_noaction, density=True)
             ax2.set(xlabel='Condition without action', ylabel='Probablity')
+            ax3.bar(years, interval_vec)
+            ax3.set(xlabel='Time (Year)', ylabel='Goals')
             fig.savefig('test_policy_multi.png')
         fig.tight_layout()
+        """ import matplotlib
+        matplotlib.use("pgf")
+        matplotlib.rcParams.update({
+                "pgf.texsystem": "pdflatex",
+                'font.family': 'serif',
+                'text.usetex': True,
+                'pgf.rcfonts': False,
+            })
+        fig2 = plt.figure()
+        X, Y = np.mgrid[np.min(cond_scatter):np.max(cond_scatter):100j, np.min(speed_scatter):np.max(speed_scatter):100j]
+        positions = np.vstack([X.ravel(), Y.ravel()])
+        values = np.vstack([cond_scatter, speed_scatter])
+        kernel = stats.gaussian_kde(values)
+        Z = np.reshape(kernel(positions).T, X.shape)
+        plt.pcolor(X,Y,Z, cmap ='twilight')
+        plt.colorbar()
+        plt.xlabel('Condition $\mu_t$')
+        plt.ylabel('Speed $\dot{\mu}_t$')
+        #ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,extent=[np.min(cond_scatter), np.max(cond_scatter), np.min(speed_scatter),np.max(speed_scatter)], aspect = 'auto')
+        fig2.savefig('density_no_action.pgf', bbox_inches='tight') """
 
     """ Performance Metrics  ########################################################################################################
 
@@ -1508,16 +1868,16 @@ class infra_planner:
         goal_transition
 
     """  
-    def decision_maker(self, state):
+    def decision_maker(self, state):#, val):
         if self.discrete_actions:
             if self.element_lvl:
-                goal = self.agent_element_discrete(state)
+                goal = self.agent_element_discrete(state)#, val)
             else: 
                 goal = self.agent_high_discrete(state)
         else:
             if self.element_lvl:
-                goal_ = self.agent_one_element(state)
-                goal = self.goal_to_action_index(goal_)
+                goal = self.agent_one_element(state)
+                #goal = self.goal_to_action_index(goal_)
             elif self.category_lvl:
                 goal = self.agent_category(state)
             elif self.bridge_lvl: 
@@ -1527,45 +1887,73 @@ class infra_planner:
         return goal  
 
     def goal_to_action_index(self, goal):
-        if goal > (self.int_Ex[0][2,0]/75):
-            index_a = 4
-        elif goal > (self.int_Ex[0][1,0]/75):
-            index_a = 3
-        elif goal > (self.int_Ex[0][0,0]/75):
-            index_a = 2
-        elif goal > 0:
-            index_a = 1
+        if self.deterministic_model:
+            if goal > (self.int_true[self.cc][2][0]/75):
+                index_a = 4
+            elif goal > (self.int_true[self.cc][1][0]/75):
+                index_a = 3
+            elif goal > (self.int_true[self.cc][0][0]/75):
+                index_a = 2
+            elif goal > 0:
+                index_a = 1
+            else:
+                index_a = 0
         else:
-            index_a = 0
+            if goal > (self.int_Ex[self.cc][2][0]/75):
+                index_a = 4
+            elif goal > (self.int_Ex[self.cc][1][0]/75):
+                index_a = 3
+            elif goal > (self.int_Ex[self.cc][0][0]/75):
+                index_a = 2
+            elif goal > 0:
+                index_a = 1
+            else:
+                index_a = 0
         return index_a
     
+    def goal_category_to_element(self, goal, state_sum):
+        elem_goal = np.max([( (self.b_min_functional_state[0] - self.cs[self.cb, self.cc, self.ci, 0])/ (self.num_e[self.cb, self.cc, 0]*self.b_min_functional_state[0] - state_sum)) * goal * self.num_e[self.cb, self.cc, 0],0]) if self.deterministic_model else np.max([( (self.b_min_functional_state[0] - self.e_Ex[self.cb, self.cc, self.ci, 0])/ (self.num_e[self.cb, self.cc, 0]*self.b_min_functional_state[0] - state_sum) ) * goal * self.num_e[self.cb, self.cc, 0], 0])
+        return elem_goal
+
     def goal_bridge_to_category(self, goal, state_sum):
-        cat_goal = ( self.c_cs[self.cb,self.cc,0]/ state_sum) * goal * self.num_c[self.cb] if self.deterministic_model else ( self.c_Ex[self.cb,self.cc,0]/ state_sum ) * goal * self.num_c[self.cb]
+        if goal == 1:
+            cat_goal = np.max([( (self.max_cond - self.c_cs[self.cb,self.cc,0])/ (self.max_cond*self.num_c[self.cb] - state_sum)) * goal * self.num_c[self.cb], 0]) if self.deterministic_model else np.max([( (self.max_cond - self.c_Ex[self.cb,self.cc,0])/ (self.max_cond*self.num_c[self.cb] - state_sum)) * goal * self.num_c[self.cb],0])
+        else:
+            cat_goal = np.max([( (self.b_min_functional_state[0] - self.c_cs[self.cb,self.cc,0])/ (self.b_min_functional_state[0]*self.num_c[self.cb] - state_sum)) * goal * self.num_c[self.cb], 0]) if self.deterministic_model else np.max([( (self.b_min_functional_state[0] - self.c_Ex[self.cb,self.cc,0])/ (self.b_min_functional_state[0]*self.num_c[self.cb] - state_sum)) * goal * self.num_c[self.cb],0])
         return cat_goal
     
     def goal_network_to_bridge(self, goal, state_sum):
-        bridge_goal = ( self.b_cs[self.cb,0]/ state_sum) * goal * self.num_b if self.deterministic_model else ( self.b_Ex[self.cb,0]/ state_sum ) * goal * self.num_b
+        bridge_goal = np.max([( (self.b_min_functional_state[0] - self.b_cs[self.cb,0])/ (self.b_min_functional_state[0]* self.num_b - state_sum)) * goal * self.num_b, 0]) if self.deterministic_model else np.max([((self.b_min_functional_state[0] - self.b_Ex[self.cb,0])/ (self.b_min_functional_state[0]*self.num_b - state_sum) ) * goal * self.num_b,0])
         return bridge_goal
+
+    def goal_transition_high_bridge(self, state, goal, next_state, goal_dim):
+        # return next goal
+        # max (next_goal, 0) to avoid negative goals
+        # min (next_goal, goal) to avoid actions due to deterioration
+        return np.min([np.max([(state[goal_dim] + goal*75 - next_state[goal_dim])/75, 0]), goal])
 
     def goal_transition_high(self, state, goal, next_state, goal_dim):
         # return next goal
         # max (next_goal, 0) to avoid negative goals
         # min (next_goal, goal) to avoid actions due to deterioration
-        return np.min([np.max([(state[goal_dim] + goal*75 - next_state[goal_dim])*self.num_e[self.cb,self.cc,0]/75, 0]), goal])
+        return np.min([np.max([(state[goal_dim] + goal*75 - next_state[goal_dim])/75, 0]), goal])
+    
+    def goal_transition_elem(self, state, goal, next_state, goal_dim):
+        # return next goal
+        # max (next_goal, 0) to avoid negative goals
+        # min (next_goal, goal) to avoid actions due to deterioration when taking no-action
+        return np.min([np.max([(state[goal_dim] + goal*75 - next_state[goal_dim])/75, 0]), goal])
 
-    def goal_transition(self, goal_local, state_element):
+    #def goal_transition(self, goal_local, state_element):
         # return next goal
         # max (next_goal, 0) to avoid negative goals
         # min (next_goal, goal) to avoid actions due to deterioration
         # [0] condition, [1] speed, [2] element identifier, [3] total num elements, [4] target cat cond, [5] goal
-        return np.min([np.max([(state_element[5] * state_element[3] - goal_local), 0]), state_element[5] * state_element[3]])
+    #    return np.min([np.max([(state_element[5] * state_element[3] - goal_local)/state_element[3], 0]), state_element[5] ])
 
     """ gym requirments  ########################################################################################################
-        render
         close
     """
-    def render(self, mode = "human"):
-        return
     
     def close(self):
         return
@@ -1646,7 +2034,7 @@ class SpaceTransformation:
         std_dot_1n = np.zeros(mu_dot.size)
         std_dot_2p = np.zeros(mu_dot.size)
         std_dot_2n = np.zeros(mu_dot.size)
-        if mu.size == 1:
+        if np.size(mu) == 1:
             if mu > self.upper_limit + max_range:
                 mu = self.upper_limit + max_range
             if mu < self.lower_limit - max_range:
