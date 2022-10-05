@@ -34,9 +34,9 @@ class decision_maker:
             self.load_agent_bridge(self.filenames_bridge)
 
     # element level decision makers
-    def agent_element_lvl_discrete(self, state):#, val):
+    def agent_element_lvl_discrete(self, state, cc = 0):#, val):
         if self.file_names != '':
-            goal = self.evaluate_agent(state)
+            goal = self.evaluate_agent(state, cc)
         else:
             goal = 1 #if (state[2] % self.exp_interval == 0) else 0 # and state[2] != 0
             if state[0] > 60 and state[1] > -1.2 :
