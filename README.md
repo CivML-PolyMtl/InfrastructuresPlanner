@@ -1,8 +1,8 @@
-# Infrastructures Planner
+# Infrastructure Planner
 
 ---
 
-Infrastructures Planner is a custom gym environment to plan interventions on infrastrucutres.
+Infrastructure Planner is a custom gym environment to plan interventions on transportation infrastrucutre.
 
 ## Getting Started
 
