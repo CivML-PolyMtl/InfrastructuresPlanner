@@ -96,18 +96,6 @@ class decision_maker:
                     action = 0
         return action
 
-    # high level decision makers
-    """ def agent_multi_element_lvl(self, state_element):
-        goal_dim = 0
-        local_change = np.max([state_element[4] - state_element[goal_dim], 0])
-        total_change = state_element[5] * 75 * state_element[3]
-        if state_element[5] > 0 :
-            ratio = np.min([local_change / total_change, 1])
-            goal = ratio * state_element[5] * state_element[3]
-        else:
-            goal = 0
-        return goal """
-
     def agent_high_lvl_discrete(self, state):
         if self.file_names != '':
             goal = self.evaluate_agent_bridge(state)
@@ -193,7 +181,6 @@ class decision_maker:
         for i in range(len(filenames)):
             file_path.append(os.path.join(".", "model", filenames[i]))
         # initialize network weights
-        # Beams | Front Wall | Slabs | gaurdrail  | Wing Wall | Pavement
         self.policy_bridge_1.load_state_dict(torch.load(file_path[0])['policy_net'])
         return None
 
@@ -210,24 +197,6 @@ class decision_maker:
             action = torch.argmax(self.policy_nn_wingwall(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
         elif cc == 5:
             action = torch.argmax(self.policy_nn_pavement(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-            
-        """ x = np.arange(25, 100, 0.1)
-        y = np.arange(0, -3, -0.05)
-        x_, y_ = np.meshgrid(x, y)
-        action_map=np.zeros([y.size,x.size])
-        for i in range(y.size):
-            for j in range(x.size):
-                action_map[i,j] = torch.argmax(self.policy_nn_beams(torch.FloatTensor([x_[i,j],y_[i,j]]).to(device)), dim = 1).cpu().detach().numpy() #(self.policy_nn(torch.FloatTensor([x_[i,j],y_[i,j]]).to(device))).cpu().detach().numpy()[0,1]/torch.max(self.policy_nn(torch.FloatTensor([x_[i,j],y_[i,j]]).to(device))).cpu().detach().numpy()
-        import matplotlib.pyplot as plt 
-        from mpl_toolkits.mplot3d import Axes3D
-        plt.pcolor(x_,y_,action_map)
-        plt.axvline(x=55)
-        plt.axhline(y=-1.5)
-        plt.xlabel('Condition $\mu_t$')
-        plt.ylabel('Speed $\dot{\mu}_t$')
-        #plt.title('Action $a_1$')
-        plt.colorbar()
-        plt.show() """
         return action[0]
     
     def evaluate_agent_bridge(self, state, cb = 0):
@@ -241,44 +210,6 @@ class decision_maker:
         #self.load_agent(self.file_names)
 
         #self.load_agent_bridge(self.filenames_bridge)
-        import glob
-        import pandas as pd
-
-        glued_data = pd.DataFrame()
-        for file_name in glob.glob('./Element_prediction/'+'*.csv'):
-            x = pd.read_csv(file_name, low_memory=False,names=["Condition", "Speed"])
-            glued_data = pd.concat([glued_data,x],axis=1)
-        """ action = torch.argmax(self.policy_nn_frontwall(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-        action = torch.argmax(self.policy_nn_slabs(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-        action = torch.argmax(self.policy_nn_gaurdrail(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-        action = torch.argmax(self.policy_nn_wingwall(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy()
-        action = torch.argmax(self.policy_nn_pavement(torch.FloatTensor(state).to(device)), dim = 1).cpu().detach().numpy() """
-        cost_curve = np.zeros(52)
-        delta_q = np.zeros(52)
-        j = 0
-        for i in range(len(glob.glob('./Element_prediction/'+'*.csv'))):
-            if i < 3:
-                delta_q = np.cumsum(self.policy_nn_gaurdrail(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_gaurdrail(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_gaurdrail(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_gaurdrail(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            elif i < 5:
-                delta_q = np.cumsum(self.policy_nn_frontwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_frontwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_frontwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_frontwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            elif i < 9:
-                delta_q = np.cumsum(self.policy_nn_wingwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_wingwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_wingwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_wingwall(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            elif i < 12:
-                delta_q = np.cumsum(self.policy_nn_slabs(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_slabs(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_slabs(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_slabs(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            elif i < 27:
-                delta_q = np.cumsum(self.policy_nn_beams(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_beams(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_beams(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_beams(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            else:
-                delta_q = np.cumsum(self.policy_nn_pavement(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] - torch.max(self.policy_nn_pavement(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy())
-                cost_curve += (self.policy_nn_pavement(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)).cpu().detach().numpy()[:,0] + delta_q)/torch.max(self.policy_nn_pavement(torch.FloatTensor(glued_data.iloc[:,[i+j,i+j+1]].to_numpy()).to(device)), dim =1 )[0].cpu().detach().numpy()
-            j += 1
-        import matplotlib.pyplot as plt 
-        plt.plot(np.arange(2007, 2059, 1),cost_curve/29)
-        plt.show()
         x = np.arange(25, 100, 0.1)
         y = np.arange(0, -3, -0.05)
         x_, y_ = np.meshgrid(x, y)
@@ -302,7 +233,7 @@ class decision_maker:
         fig, ax = plt.subplots(1, 1, figsize=(7, 5))  # setup the plot
         plt.xlabel('Condition $\mu_t$')
         plt.ylabel('Speed $\dot{\mu}_t$')
-        plt.title('Wing-wall')
+        plt.title('Pavement')
         plt.plot([55, 100], [-1.5, -1.5], zorder = 2,label='Critical Speed', color = 'r',linewidth=2)
         plt.plot([55, 55], [-1.5, 0], zorder = 3,label='Critical Condition', color = 'r',linewidth=2)
         plt.plot([100, 100], [-2.99, -1.5], zorder = 3, color = 'r',linewidth=4)
