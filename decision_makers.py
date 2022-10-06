@@ -82,11 +82,11 @@ class decision_maker:
         else:
             if state[0] <= self.shutdown_cond:
                 action = 4
-            elif state[0] < 55 and state[2] % self.exp_interval == 0 and state[2] != 0 :
+            elif state[0] < 55  :
                 action = 3
-            elif state[0] < 70 and state[2] % self.exp_interval == 0 and state[2] != 0 :
+            elif state[0] < 70  :
                 action = 2
-            elif state[1] < -1.5 and state[2] % self.exp_interval == 0 and state[2] != 0:
+            elif state[1] < -1.5 :
                 action = 1
             else :
                 action = 0
@@ -97,7 +97,7 @@ class decision_maker:
         return action
 
     # high level decision makers
-    def agent_multi_element_lvl(self, state_element):
+    """ def agent_multi_element_lvl(self, state_element):
         goal_dim = 0
         local_change = np.max([state_element[4] - state_element[goal_dim], 0])
         total_change = state_element[5] * 75 * state_element[3]
@@ -106,14 +106,14 @@ class decision_maker:
             goal = ratio * state_element[5] * state_element[3]
         else:
             goal = 0
-        return goal
+        return goal """
 
     def agent_high_lvl_discrete(self, state):
         if self.file_names != '':
             goal = self.evaluate_agent_bridge(state)
         else:
             goal = 1 if (state[2] % 1 == 0 and state[2] != 0) else 0 #self.exp_interval
-            if state[0] > 60 and state[1] > -1.5 and state[3] < 10 :
+            if state[0] > 60 and state[1] > -1.5 and state[2] < 10 :
                 goal = 0
             if self.include_budget: 
                 if state[-1] < 0: 

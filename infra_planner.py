@@ -6,7 +6,7 @@
     Webpage: https://zachamida.github.io
 
 """
-from decision_makers import decision_maker
+from envs.InfrastructuresPlanner.decision_makers import decision_maker
 from gym import spaces
 import numpy as np
 import math as mt
@@ -19,19 +19,16 @@ import scipy.interpolate as interpolate
 import matplotlib.pyplot as plt
 from os.path import join as pjoin
 
-from torch import seed
-
-
 class infra_planner:
     def __init__(self, fixed_seed=0):
         # Analyses level
-        self.element_lvl = 1
+        self.element_lvl = 0
         self.category_lvl = 0
-        self.bridge_lvl = 0
+        self.bridge_lvl = 1
         self.network_lvl = 0
         
         # State type
-        self.deterministic_model = 1
+        self.deterministic_model = 0
 
         # action type
         self.discrete_actions = 1
@@ -92,7 +89,7 @@ class infra_planner:
                                 ])
 
         # plotting    
-        self.plotting = 0
+        self.plotting = 1
 
         # Environment Seed
         self.fixed_seed = fixed_seed
@@ -352,6 +349,7 @@ class infra_planner:
         self.plt_var = []
         self.plt_Ex_dot = []
         self.plt_var_dot = []
+        self.plt_goal = []
         self.plt_R = []
         self.plt_t = []
 
@@ -532,7 +530,8 @@ class infra_planner:
 
         # update plotting functions
         if self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
-            self.render(goal)
+            self.plt_goal.append(goal)
+            self.render()
 
         return state, goal, reward, next_state
 
@@ -597,7 +596,8 @@ class infra_planner:
 
         # update plotting functions
         if self.network_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
-            self.render(goal)
+            self.plt_goal.append(goal)
+            self.render()
         if self.network_lvl:
             return state, goal, reward, next_state
 
@@ -668,7 +668,8 @@ class infra_planner:
 
         # update plotting functions
         if self.bridge_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
-            self.render(goal)
+            self.plt_goal.append(goal)
+            self.render()
 
         if self.bridge_lvl:
             return state, goal, reward, next_state
@@ -756,7 +757,8 @@ class infra_planner:
 
         # update plotting functions
         if self.category_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
-            self.render(goal)
+            self.plt_goal.append(goal)
+            self.render()
 
         if self.category_lvl:
             return state, goal, reward, next_state
@@ -804,7 +806,8 @@ class infra_planner:
 
         # update plotting functions
         if self.element_lvl and self.plotting == 1 and self.current_year > self.inspection_frq[self.cb]:
-            self.render(action)
+            self.plt_goal.append(action)
+            self.render()
 
         if self.element_lvl:
             next_state = self.state_element_prep() 
@@ -1264,8 +1267,8 @@ class infra_planner:
             #state = np.append(state, self.actions_hist[self.cb, self.cc, self.ci, 4])
         elif self.category_lvl:
             # number of years without an action
-            act_time = np.ceil(self.act_timer/self.num_e[self.cb, self.cc, 0])
-            state = np.append(state, act_time)
+            #act_time = np.ceil(self.act_timer/self.num_e[self.cb, self.cc, 0])
+            #state = np.append(state, act_time)
             state = np.append(state, self.e_variablity)
         elif self.bridge_lvl:
             #act_time = np.ceil(self.act_timer/self.num_c[self.cb])
@@ -1450,7 +1453,7 @@ class infra_planner:
         pdf_plot_
 
     """  
-    def render(self, goal):
+    def render(self):
         if self.element_lvl:
             self.plt_Ex.append(self.e_Ex[self.cb,self.cc,self.ci,0])
             self.plt_var.append(self.e_Var[self.cb,self.cc,self.ci,0,0])
@@ -1501,12 +1504,13 @@ class infra_planner:
         self.plt_t = self.plt_t[-20:]
         self.plt_true_c = self.plt_true_c[-20:]
         self.plt_true_s = self.plt_true_s[-20:]
+        self.plt_goal = self.plt_goal[-20:]
         fig = plt.figure(1)
         fig.clf()
         (ax1, ax2) = fig.subplots(1,2)
         ax1.clear()
         ax2.clear()
-        self.animate(goal, ax1, ax2)
+        self.animate(self.plt_goal, ax1, ax2)
         plt.tight_layout()
         plt.show(block=False)
         plt.draw()
@@ -1514,17 +1518,23 @@ class infra_planner:
         
     
     def animate(self, goal, ax1, ax2): #, t_val,Ex_val,Var_val,Ex_d_val,Var_d_val, y_Ex, R_Ex, goal, ax1, ax2):
-        self.state_plot(np.array(self.plt_Ex),np.array(self.plt_var),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'condition', ax1, ax2)
-        self.state_plot(np.array(self.plt_Ex_dot),np.array(self.plt_var_dot),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'speed', ax1, ax2, self.plt_Ex)
+        if self.deterministic_model == 0:
+            self.state_plot(np.array(self.plt_Ex),np.array(self.plt_var),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'condition', ax1, ax2)
+            self.state_plot(np.array(self.plt_Ex_dot),np.array(self.plt_var_dot),np.array(self.plt_y),np.array(self.plt_R),np.array(self.plt_t),'speed', ax1, ax2, self.plt_Ex)
         true_cond = self.ST.transformed_to_original(np.array(self.plt_true_c)).copy()
         true_speed, _, _, _, _ = self.ST.transformed_to_original_speed(np.array(self.plt_true_c), np.array(self.plt_true_s), np.ones(self.plt_true_s.__len__()))
         ax1.plot(np.array(self.plt_t), true_cond, 'k', label = 'True')
         ax2.plot(np.array(self.plt_t), true_speed,'k')
         ax1.legend(loc="lower left")
-        if self.element_lvl:
-            ax1.bar(self.plt_t[-1], (75*goal/4)+25)
+        if self.element_lvl and self.discrete_actions:
+            ax1.bar(self.plt_t, (75*np.divide(goal,10))+25)
+        elif self.element_lvl:
+            ax1.bar(self.plt_t, (75*np.divide(goal,4))+25)
         else:
-            ax1.bar(self.plt_t[-1], (75*goal)+25)
+            ax1.bar(self.plt_t, np.multiply(75,goal)+25)
+        ax1.set(xlabel='Time (Year)', ylabel='Deterioration Condition')
+        ax1.set_ylim([25, 100])
+        ax2.set(xlabel='Time (Year)', ylabel='Deterioration Speed')
         
     def state_plot(self, mu, var, y, R, years, plot_type, ax1, ax2, *args):
         if plot_type == 'condition':
@@ -1543,8 +1553,6 @@ class infra_planner:
                 ax1.errorbar(years, y_original, np.array([r_under, r_above]), linestyle='dotted')
             ax1.fill_between(years, std_original_1n, std_original_1p, color=self.color_std, alpha=.1)
             ax1.fill_between(years, std_original_2n, std_original_2p, color=self.color_std, alpha=.1)
-            ax1.set(xlabel='Time (Year)', ylabel='Condition')
-            ax1.set_ylim([25, 100])
         elif plot_type == 'speed':
             mu_cond = args[0]
             mu_dot, std_dot_1p, std_dot_1n, std_dot_2p, std_dot_2n = self.ST.transformed_to_original_speed(mu_cond,
@@ -1552,7 +1560,6 @@ class infra_planner:
             ax2.plot(years, mu_dot)
             ax2.fill_between(years, std_dot_1n, std_dot_1p, color=self.color_std, alpha=.1)
             ax2.fill_between(years, std_dot_2n, std_dot_2p, color=self.color_std, alpha=.1)
-            ax2.set(xlabel='Time (Year)', ylabel='Speed')
         plt.draw()
     
     def pdf_plot_(self, mu, var, action, plot_type, ax1, ax2):
