@@ -1,6 +1,6 @@
-""" Infrastructures Planner ########################################################################################################
+""" Infra Planner ########################################################################################################
 
-    Infrastructures Planner is a custom gym environment to plan interventions on infrastrucutres.
+    Infra Planner is a custom gym environment to plan interventions on infrastrucutre.
     Developed by: Zachary Hamida
     Email: zac.hamida@gmail.com
     Webpage: https://zachamida.github.io
