@@ -89,7 +89,7 @@ class infra_planner:
                                 ])
 
         # plotting    
-        self.plotting = 1
+        self.plotting = 0
 
         # Environment Seed
         self.fixed_seed = fixed_seed
