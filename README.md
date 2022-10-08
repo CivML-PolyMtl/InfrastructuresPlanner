@@ -30,11 +30,7 @@ Create a virtual environment,
 
 ```{.py}
 python -m venv .venv
-```
-
-Or,
-
-```{.py}
+# Or,
 python3 -m venv .venv
 ```
 
@@ -42,6 +38,8 @@ Activate the environment,
 
 ```{.py}
 source .venv/bin/activate
+# Or in windows,
+".venv/scripts/activate.bat"
 ```
 
 Install the required packages by using the pip command in terminal,
