@@ -54,7 +54,7 @@ Run environment tests using,
  python test_env.py
 ```
 
-To perform analyses on vectorized environment:
+To perform analyses on vectorized environment, a recommanded wrapper is (RayEnvWrapper):
 
 ```{ .py}
 pip install RayEnvWrapper
