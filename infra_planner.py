@@ -20,12 +20,29 @@ import matplotlib.pyplot as plt
 from os.path import join as pjoin
 
 class infra_planner:
-    def __init__(self, fixed_seed=0):
+    def __init__(self, fixed_seed=0, infra_lvl =0):
         # Analyses level
-        self.element_lvl = 0
-        self.category_lvl = 0
-        self.bridge_lvl = 1
-        self.network_lvl = 0
+        self.infra_lvl = infra_lvl
+        if self.infra_lvl == 0:
+            self.element_lvl = 1
+            self.category_lvl = 0
+            self.bridge_lvl = 0
+            self.network_lvl = 0 # (under construction)
+        elif self.infra_lvl == 1:
+            self.element_lvl = 0
+            self.category_lvl = 1
+            self.bridge_lvl = 0
+            self.network_lvl = 0 # (under construction)
+        elif self.infra_lvl == 2:
+            self.element_lvl = 0
+            self.category_lvl = 0
+            self.bridge_lvl = 1
+            self.network_lvl = 0 # (under construction)
+        else:
+            self.element_lvl = 1
+            self.category_lvl = 0
+            self.bridge_lvl = 0
+            self.network_lvl = 0 # (under construction)
         
         # State type
         self.deterministic_model = 0
@@ -134,7 +151,7 @@ class infra_planner:
 
         self.min_high_cond = 0                              # track the ID of the sorted condition from min. condition to high condition
         self.y = np.nan * np.zeros([self.num_c[self.cb], np.max(self.num_e[self.cb,:, 0])]) # inspection data y
-        self.inspection_frq = np.random.randint(3,4,self.num_b)                             # inspection frequency 
+        self.inspection_frq = np.random.randint(2,5,self.num_b)                             # inspection frequency 
         self.inspector_std = np.array(range(0,223))                                         # inspector ID
         self.inspector_std = np.c_[self.inspector_std, np.random.uniform(1,6,223)]          # inspectors' error std.
 
