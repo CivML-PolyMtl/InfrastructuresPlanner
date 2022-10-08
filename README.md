@@ -54,6 +54,12 @@ Run environment tests using,
  python test_env.py
 ```
 
+## Remarks
+
+The Infra Planner package is originally developed based on the inspection and interventions database of the Transportation Ministry of Quebec (MTQ).
+
+## Misc
+
 To perform analyses on vectorized environment, a recommanded wrapper is (RayEnvWrapper):
 
 ```{ .py}
@@ -64,4 +70,17 @@ env = WrapperRayVecEnv(base_env, number_of_workers, envs_per_worker)
 env.step(0)
 ```
 
-Note: RayEnvWrapper is an external package and could be incompatible with the OS configureation.
+  **Note: RayEnvWrapper is an external package and could be incompatible with the OS configureation.
+
+## Contributing
+
+Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on the process for submitting pull requests.
+
+## Authors
+
+* **Zachary Hamida** - *Methodology, initial code and development* - [webpage](https://zachamida.github.io)
+* **James-A. Goulet** - *Methodology* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
+
+## Acknowledgments
+
+- The funding for this project is provided by the Transportation Ministry of Quebec Province (MTQ), Canada.
