@@ -4,21 +4,51 @@
 
 Infrastructure Planner is a custom gym environment to plan interventions on transportation infrastrucutre.
 
+## Prerequisites
+
+- Python 3.
+
+- Pytorch: load pre-traind models (Optional).
+
+- Access to GPU computing (Optional)
+
 ## Getting Started
 
-To get started, create a virtual environment in vscode
+To get started, clone the repo,
+
+```{.py}
+git clone https://github.com/CivML-PolyMtl/InfrastructuresPlanner.git
+```
+
+Access the project folder,
+
+```{.py}
+cd InfrastructuresPlanner
+```
+
+Create a virtual environment,
 
 ```{.py}
  python -m venv .venv
 ```
 
-Install the required packages by using the pip command in terminal:
+Activate the environment,
+
+```{.py}
+ ./.venv/bin/activate
+```
+
+Install the required packages by using the pip command in terminal,
 
 ```{.py}
  pip install -r requirements.txt
 ```
 
-Excute environment tests using `test_env.py`.
+Run environment tests using,
+
+```{.py}
+ python test_env.py
+```
 
 To perform analyses on vectorized environment:
 
