@@ -70,7 +70,7 @@ env = WrapperRayVecEnv(base_env, number_of_workers, envs_per_worker)
 env.step(0)
 ```
 
-  **Note: RayEnvWrapper is an external package and could be incompatible with the OS configureation.
+* **Note**: RayEnvWrapper is an external package and could be incompatible with the OS configureation.
 
 ## Contributing
 
