@@ -29,13 +29,19 @@ cd InfrastructuresPlanner
 Create a virtual environment,
 
 ```{.py}
- python -m venv .venv
+python -m venv .venv
+```
+
+Or,
+
+```{.py}
+python3 -m venv .venv
 ```
 
 Activate the environment,
 
 ```{.py}
- ./.venv/bin/activate
+source .venv/bin/activate
 ```
 
 Install the required packages by using the pip command in terminal,
