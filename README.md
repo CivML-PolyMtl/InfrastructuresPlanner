@@ -5,7 +5,7 @@
 Open-Source RL Environment for Planning Interventions on Transportation Infrastructure
 </p>
 
-InfraPlanner is a Python open-source environment developed in accordance to the gym environment standards. This environment enables emulating the visual insepctions process, and produces probablistic estimates for the deteriroation condition and speed. The deterioration state estimates in this environment can be obtained at the element-level, the structural category level, and bridge-level.
+InfraPlanner is a Python open-source RL environment developed in accordance to the gym environment standards. This environment enables emulating the visual insepctions process, and produces probablistic estimates for the deteriroation condition and speed. The deterioration state in this environment can be obtained at the element-level, the structural category level, and bridge-level.
 
 ## Prerequisites
 
