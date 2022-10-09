@@ -82,7 +82,7 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 ## Authors
 
 * **Zachary Hamida** - *Methodology, and code development* - [webpage](https://zachamida.github.io)
-* **James-A. Goulet** - *Methodology Review* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
+* **James-A. Goulet** - *Methodology review* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
 
 ## Acknowledgments
 
