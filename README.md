@@ -1,12 +1,15 @@
-# Infrastructure Planner
+<p align="center">
+<img src="/etc/infraplanner_logo.pdf" height="110">
 
----
+<p align="center">
+Open-Source RL Environment for Planning Interventions on Transportation Infrastructure
+</p>
 
-Infrastructure Planner is a custom gym environment to plan interventions on transportation infrastrucutre.
+InfraPlanner is a Python open-source environment developed in accordance to the gym environment standards. This environment enables emulating the visual insepctions process, and produces probablistic estimates for the deteriroation condition and speed. The deterioration state estimates in this environment can be obtained at the element-level, the structural category level, and bridge-level.
 
 ## Prerequisites
 
-- Python 3.
+- Python 3.x
 
 - Pytorch: load pre-traind models (Optional).
 
@@ -78,8 +81,8 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 
 ## Authors
 
-* **Zachary Hamida** - *Methodology, initial code and development* - [webpage](https://zachamida.github.io)
-* **James-A. Goulet** - *Methodology* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
+* **Zachary Hamida** - *Methodology, and code development* - [webpage](https://zachamida.github.io)
+* **James-A. Goulet** - *Methodology Review* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
 
 ## Acknowledgments
 
