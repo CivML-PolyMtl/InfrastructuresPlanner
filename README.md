@@ -17,7 +17,7 @@ InfraPlanner is a Python open-source RL environment developed in accordance to t
 
 ## Getting Started
 
-To get started, clone the repo,
+To get started, open the terminal and clone the repo,
 
 ```{.py}
 git clone https://github.com/CivML-PolyMtl/InfrastructuresPlanner.git
