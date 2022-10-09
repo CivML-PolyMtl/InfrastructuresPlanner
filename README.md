@@ -1,5 +1,5 @@
 <p align="center">
-<img src="/etc/infraplanner_logo.pdf" height="110">
+<img src="/etc/infraplanner_logo.png" height="110">
 
 <p align="center">
 Open-Source RL Environment for Planning Interventions on Transportation Infrastructure
