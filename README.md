@@ -73,7 +73,7 @@ env = WrapperRayVecEnv(base_env, number_of_workers, envs_per_worker)
 env.step(0)
 ```
 
-* **Note**: RayEnvWrapper is an external package and could be incompatible with the OS configureation.
+* **Note**: RayEnvWrapper is an external package; therefore, it is required to verify the compatiblity with the OS in use.
 
 ## Contributing
 
@@ -81,7 +81,7 @@ Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c6
 
 ## Authors
 
-* **Zachary Hamida** - *Methodology, and code development* - [webpage](https://zachamida.github.io)
+* **Zachary Hamida** - *Methodology & code development* - [webpage](https://zachamida.github.io)
 * **James-A. Goulet** - *Methodology review & development* - [webpage](http://profs.polymtl.ca/jagoulet/Site/Goulet_web_page_MAIN.html)
 
 ## Acknowledgments
