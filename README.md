@@ -42,7 +42,7 @@ Activate the environment,
 ```{.py}
 source .venv/bin/activate
 # Or in windows,
-".venv/scripts/activate.bat"
+&.venv/scripts/activate.ps1
 ```
 
 Install the required packages by using the pip command in terminal,
